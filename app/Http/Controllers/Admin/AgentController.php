@@ -42,4 +42,30 @@ class AgentController extends Controller
 
         return redirect()->route('admin.agents.index')->with('success', 'Agent created and emailed successfully.');
     }
+
+    public function edit($id)
+    {
+        $item = User::findOrFail($id);
+        return view('admin.pages.agents.edit', compact('item'));
+    }
+
+    public function update(StoreAgentRequest $request, $id)
+    {
+        $user = User::findOrFail($id);
+        $data = $request->only(['first_name','last_name','email','mobile','address','status']);
+
+        // For compatibility with existing users table, also set 'name' column
+        $data['name'] = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''));
+
+        $user->update($data);
+
+        return redirect()->route('admin.agents.index')->with('success', 'Agent updated successfully.');
+    }
+
+    public function destroy($id)
+    {
+        $user = User::findOrFail($id);
+        $user->delete();
+        return redirect()->route('admin.agents.index')->with('success', 'Agent deleted successfully.');
+    }
 }

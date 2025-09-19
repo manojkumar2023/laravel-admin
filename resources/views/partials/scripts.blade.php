@@ -17,6 +17,9 @@
 <script src="{{ asset('assets/pages/scripts/table-datatables-responsive.min.js') }}" type="text/javascript"></script>
 <!-- END PAGE LEVEL SCRIPTS -->
 <!-- BEGIN PAGE LEVEL PLUGINS -->
+<script src="{{ asset('assets/global/plugins/bootstrap-modal/js/bootstrap-modalmanager.js') }}" type="text/javascript"></script>
+<script src="{{ asset('assets/global/plugins/bootstrap-modal/js/bootstrap-modal.js') }}" type="text/javascript"></script>
+<script src="{{ asset('assets/pages/scripts/ui-extended-modals.min.js') }}" type="text/javascript"></script>
 <script src="{{ asset('assets/global/plugins/moment.min.js') }}" type="text/javascript"></script>
 <script src="{{ asset('assets/global/plugins/bootstrap-daterangepicker/daterangepicker.min.js') }}" type="text/javascript"></script>
 <script src="{{ asset('assets/global/plugins/fullcalendar/fullcalendar.min.js') }}" type="text/javascript"></script>
@@ -40,7 +43,4 @@
 <script src="{{ asset('assets/pages/scripts/ecommerce-dashboard.min.js') }}" type="text/javascript"></script>
 <!-- END PAGE LEVEL SCRIPTS -->
 <!-- BEGIN THEME LAYOUT SCRIPTS -->
-<script src="{{ asset('assets/layouts/layout4/scripts/layout.min.js') }}" type="text/javascript"></script>
-<script src="{{ asset('assets/layouts/layout4/scripts/demo.min.js') }}" type="text/javascript"></script>
-<script src="{{ asset('assets/layouts/global/scripts/quick-sidebar.min.js') }}" type="text/javascript"></script>
 <!-- END THEME LAYOUT SCRIPTS -->

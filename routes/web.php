@@ -27,4 +27,7 @@ Route::middleware(['auth:admin', \App\Http\Middleware\PreventBackHistory::class]
     Route::get('/admin/agents', [App\Http\Controllers\Admin\AgentController::class, 'index'])->name('admin.agents.index');
     Route::get('/admin/agents/create', [App\Http\Controllers\Admin\AgentController::class, 'create'])->name('admin.agents.create');
     Route::post('/admin/agents/store', [App\Http\Controllers\Admin\AgentController::class, 'store'])->name('admin.agent.store');
+    Route::get('/admin/agents/{id}/edit', [App\Http\Controllers\Admin\AgentController::class, 'edit'])->name('admin.agents.edit');
+    Route::put('/admin/agents/{id}', [App\Http\Controllers\Admin\AgentController::class, 'update'])->name('admin.agents.update');
+    Route::delete('/admin/agents/{id}', [App\Http\Controllers\Admin\AgentController::class, 'destroy'])->name('admin.agents.destroy');
 });

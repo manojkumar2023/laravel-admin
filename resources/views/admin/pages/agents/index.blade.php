@@ -70,10 +70,10 @@
                                     <span class="label label-sm label-success"> Active </span>
                                 </td>
                                 <td>
-                                    <a href="javascript:;" class="btn btn-outline btn-circle green btn-sm purple">
+                                    <a href="{{ url('admin/agents/' . $data->id . '/edit') }}" class="btn btn-outline btn-circle green btn-sm purple">
                                         <i class="fa fa-edit"></i> Edit
                                     </a>
-                                    <a href="javascript:;" class="btn btn-outline btn-circle dark btn-sm black">
+                                    <a href="javascript:void(0)" data-target="#static" data-toggle="modal" class="btn btn-outline btn-circle dark btn-sm black open-delete-modal" data-action="{{ route('admin.agents.destroy', $data->id) }}" data-name="{{ $data->first_name }} {{ $data->last_name }}">
                                         <i class="fa fa-trash-o"></i> Delete
                                     </a>
                                 </td>
@@ -86,9 +86,37 @@
             <!-- END EXAMPLE TABLE PORTLET-->
         </div>
     </div>
+    <div id="static" class="modal fade" tabindex="-1" data-backdrop="static" data-keyboard="false">
+        <form id="deleteAgentForm" method="POST" action="">
+            @csrf
+            @method('DELETE')
+
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteAgentName"></strong>?</p>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-danger">Yes, delete</button>
+            </div>
+        </form>
+    </div>
     <!-- END PAGE BASE CONTENT -->
 </div>
 @endsection
-@push('custom_scripts')
+<script>
+$(function () {
+    var agentsBaseUrl = "{{ url('admin/agents') }}";
 
-@endpush
+        $('.open-delete-modal').on('click', function (e) {
+            e.preventDefault();
+            var action = $(this).data('action');
+            var name = $(this).data('name') || 'this agent';
+
+            // set the form action to the fully rendered destroy route for the selected agent
+            $('#deleteAgentForm').attr('action', action);
+            $('#deleteAgentName').text(name);
+            $('#static').modal('show');
+        });
+});
+</script>
