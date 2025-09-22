@@ -14,6 +14,12 @@ Route::post('logout', [LoginController::class, 'logout'])->name('logout');
 // User routes
 Route::middleware(['auth', \App\Http\Middleware\PreventBackHistory::class])->group(function () {
     Route::get('/home', [App\Http\Controllers\Controller::class, 'index'])->name('home');
+    Route::get('/clients', [App\Http\Controllers\ClientController::class, 'index'])->name('clients.index');
+    Route::get('/clients/create', [App\Http\Controllers\ClientController::class, 'create'])->name('clients.create');
+    Route::post('/clients/store', [App\Http\Controllers\ClientController::class, 'store'])->name('clients.store');
+    Route::get('/clients/{id}/edit', [App\Http\Controllers\ClientController::class, 'edit'])->name('clients.edit');
+    Route::put('/clients/{id}', [App\Http\Controllers\ClientController::class, 'update'])->name('clients.update');
+    Route::delete('/clients/{id}', [App\Http\Controllers\ClientController::class, 'destroy'])->name('clients.destroy');
 });
 
 
@@ -30,4 +36,10 @@ Route::middleware(['auth:admin', \App\Http\Middleware\PreventBackHistory::class]
     Route::get('/admin/agents/{id}/edit', [App\Http\Controllers\Admin\AgentController::class, 'edit'])->name('admin.agents.edit');
     Route::put('/admin/agents/{id}', [App\Http\Controllers\Admin\AgentController::class, 'update'])->name('admin.agents.update');
     Route::delete('/admin/agents/{id}', [App\Http\Controllers\Admin\AgentController::class, 'destroy'])->name('admin.agents.destroy');
+    Route::get('/admin/clients', [App\Http\Controllers\Admin\ClientController::class, 'index'])->name('admin.clients.index');
+    Route::get('/admin/clients/create', [App\Http\Controllers\Admin\ClientController::class, 'create'])->name('admin.clients.create');
+    Route::post('/admin/clients/store', [App\Http\Controllers\Admin\ClientController::class, 'store'])->name('admin.clients.store');
+    Route::get('/admin/clients/{id}/edit', [App\Http\Controllers\Admin\ClientController::class, 'edit'])->name('admin.clients.edit');
+    Route::put('/admin/clients/{id}', [App\Http\Controllers\Admin\ClientController::class, 'update'])->name('admin.clients.update');
+    Route::delete('/admin/clients/{id}', [App\Http\Controllers\Admin\ClientController::class, 'destroy'])->name('admin.clients.destroy');
 });

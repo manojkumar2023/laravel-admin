@@ -13,9 +13,9 @@
                 <h3 class="uppercase">Features</h3>
             </li>
             <li class="nav-item  ">
-                <a href="javascript:;" class="nav-link nav-toggle">
+                <a href="{{ route('clients.index') }}" class="nav-link nav-toggle">
                     <i class="icon-diamond"></i>
-                    <span class="title">Agents</span>
+                    <span class="title">Clients</span>
                     <!-- <span class="arrow"></span> -->
                 </a>
                 <!-- <ul class="sub-menu">

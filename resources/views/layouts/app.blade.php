@@ -48,6 +48,7 @@
         <script src="../assets/global/plugins/excanvas.min.js"></script>
         <![endif]-->
         @include('partials.scripts')
+        @stack('scripts')
     </body>
 
 </html>

@@ -26,6 +26,13 @@
                     </li>
                 </ul> -->
             </li>
+            <li class="nav-item  ">
+                <a href="{{ route('admin.clients.index') }}" class="nav-link nav-toggle">
+                    <i class="icon-diamond"></i>
+                    <span class="title">Clients</span>
+                    <!-- <span class="arrow"></span> -->
+                </a>
+            </li>
         </ul>
         <!-- END SIDEBAR MENU -->
     </div>
