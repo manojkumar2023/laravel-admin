@@ -66,7 +66,7 @@
                                 </div>
                             </div>
                             <div class="form-group @error('generate_date') has-error @enderror"">
-                                <label class="control-label col-md-3">Generate Dateaaaaaa
+                                <label class="control-label col-md-3">Generate Date
                                     <span class="required"> * </span>
                                 </label>
                                 <div class="col-md-6">

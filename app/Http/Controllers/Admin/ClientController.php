@@ -13,11 +13,13 @@ class ClientController extends Controller
     {
         $userId = request()->query('user_id');
 
+        $query = Client::with('user');
+
         if ($userId) {
-            $items = Client::where('user_id', $userId)->get();
-        } else {
-            $items = Client::all();
+            $query->where('user_id', $userId);
         }
+
+        $items = $query->get();
 
         return view('admin.pages.client.index', compact('items'));
     }
@@ -44,13 +46,18 @@ class ClientController extends Controller
     public function edit($id)
     {
         $item = Client::findOrFail($id);
-        return view('admin.pages.client.edit', compact('item'));
+        $agents = User::all();
+        return view('admin.pages.client.edit', compact('item', 'agents'));
     }
 
     public function update(Request $request, $id)
     {
         $client = Client::findOrFail($id);
         $data = $request->only(['client_name','email','mobile','address','status','next_follow_up_date','remarks','budget','designer_name','generate_date']);
+
+        if ($request->filled('user_id')) {
+            $data['user_id'] = $request->input('user_id');
+        }
 
         $client->update($data);
 

@@ -51,6 +51,7 @@
                             <tr>
                                 <th>Sr. No</th>
                                 <th>Date</th>
+                                <th>Sales person</th>
                                 <th>Client name</th>
                                 <th>Email</th>
                                 <th>Mobile</th>
@@ -67,7 +68,8 @@
                             <tr>
                                 <td>{{$key + 1}}</td>
                                 <td>{{ optional($data->generate_date)->format('d M Y') }}</td>
-                                    <td>{{$data->client_name}}</td>
+                                <td>{{ optional($data->user)->first_name ? optional($data->user)->first_name . ' ' . optional($data->user)->last_name : '-' }}</td>
+                                <td>{{$data->client_name}}</td>
                                 <td>{{$data->email}}</td>
                                 <td>{{$data->mobile}}</td>
                                 <td>{{$data->address}}</td>
@@ -112,6 +114,7 @@
     <!-- END PAGE BASE CONTENT -->
 </div>
 @endsection
+@push('scripts')
 <script>
     $(function () {
         $('.delete-data').on('click', function (e) {
@@ -126,3 +129,4 @@
         });
     });
 </script>
+@endpush

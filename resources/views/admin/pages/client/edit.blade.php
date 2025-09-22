@@ -40,7 +40,7 @@
                 </div>
                 <div class="portlet-body">
                     <!-- BEGIN FORM-->
-                    <form action="{{ route('clients.update', $item->id) }}" method="POST" id="form_sample_2" class="form-horizontal">
+                    <form action="{{ route('admin.clients.update', $item->id) }}" method="POST" id="form_sample_2" class="form-horizontal">
                         @csrf
                         @method('PUT')
                         <div class="form-body">
@@ -50,22 +50,22 @@
                             <div class="alert alert-success display-hide">
                                 <button class="close" data-close="alert"></button> Your form validation is successful!
                             </div>
-                            <!-- <div class="form-group @error('user_id') has-error @enderror">
-                                <label class="control-label col-md-3">Sales Persons
+                            <div class="form-group @error('user_id') has-error @enderror">
+                                <label class="control-label col-md-3">Sales Person
                                     <span class="required"> * </span>
                                 </label>
                                 <div class="col-md-4">
-                                    <select name="user_id" class="form-control" required>
+                                    <select name="user_id" class="form-control">
                                         <option value="">Select...</option>
                                         @foreach($agents as $agent)
-                                            <option value="{{ $agent->id }}" {{ $item->==$agent->id ? 'selected' : '' }}>{{ $agent->first_name }} {{ $agent->last_name }}</option>
+                                            <option value="{{ $agent->id }}" {{ ($item->user_id ?? null) == $agent->id ? 'selected' : '' }}>{{ $agent->first_name }} {{ $agent->last_name }}</option>
                                         @endforeach
                                     </select>
                                     @error('user_id')
                                         <span class="help-block"> {{ $message }} </span>
                                     @enderror
                                 </div>
-                            </div> -->
+                            </div>
                             <div class="form-group @error('generate_date') has-error @enderror"">
                                 <label class="control-label col-md-3">Generate Date
                                     <span class="required"> * </span>
