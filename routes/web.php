@@ -21,6 +21,16 @@ Route::middleware(['auth', \App\Http\Middleware\PreventBackHistory::class])->gro
     Route::put('/clients/{id}', [App\Http\Controllers\ClientController::class, 'update'])->name('clients.update');
     Route::delete('/clients/{id}', [App\Http\Controllers\ClientController::class, 'destroy'])->name('clients.destroy');
     Route::get('/estimate', [App\Http\Controllers\EstimateController::class, 'index'])->name('estimate.index');
+    // API to get next persistent estimate serial
+    Route::get('/estimate/serial/next', [App\Http\Controllers\EstimateSerialController::class, 'next'])->name('estimate.serial.next');
+    // Store full estimate (persist estimate and items)
+    Route::post('/estimate/store', [App\Http\Controllers\EstimateController::class, 'store'])->name('estimate.store');
+    // Create a draft estimate (creates header with BID and primary serial)
+    Route::post('/estimate/draft', [App\Http\Controllers\EstimateController::class, 'draft'])->name('estimate.draft');
+    // Add a single item to an existing estimate
+    Route::post('/estimate/{id}/item', [App\Http\Controllers\EstimateController::class, 'addItem'])->name('estimate.addItem');
+    // Return estimate header and items as JSON
+    Route::get('/estimate/{id}/items', [App\Http\Controllers\EstimateController::class, 'items'])->name('estimate.items');
 });
 
 

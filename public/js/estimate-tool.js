@@ -1,3 +1,5 @@
+// estimate-tool.js
+// (initial duplicate wrapper removed - the file contains a single implementation below)
 // Estimator tool JS extracted from 26.html
 // This file is intended to be loaded after jspdf, xlsx and html2canvas are available.
 
@@ -367,6 +369,7 @@ let currentElement = null;
 let currentArea = null;
 let estimateItems = [];
 let groupedItems = {};
+let currentEstimateId = null; // holds the server-side estimate id when a draft has been created
 
 // Update elements based on selected area
 function updateElements() {
@@ -387,6 +390,51 @@ function updateElements() {
             elementDiv.addEventListener('click', () => selectElement(element));
             elementContainer.appendChild(elementDiv);
         });
+    }
+}
+
+// Load persisted items for an estimate id and populate the grid
+async function loadEstimateItems(estimateId) {
+    try {
+        const res = await fetch(`/estimate/${estimateId}/items`, { credentials: 'same-origin' });
+        if (!res.ok) {
+            console.error('Failed to load estimate items', res.status);
+            return;
+        }
+        const json = await res.json();
+        // Map server items into local shape
+        estimateItems = (json.items || []).map(it => ({
+            id: it.id,
+            property_type: it.property_type || '',
+            property_selection: it.property_selection || '',
+            area: it.area,
+            element: it.element,
+            material: it.material,
+            finish: it.finish,
+            dimensions: it.dimensions,
+            unit: it.unit,
+            quantity: it.quantity,
+            rate: it.rate,
+            amount: it.amount,
+            amountValue: parseFloat(it.amount) || 0,
+            floor: it.floor
+        }));
+
+        renderEstimateTable();
+        // Apply totals from estimate header if available
+        if (json.estimate) {
+            const est = json.estimate;
+            if (document.getElementById('summaryTotal')) document.getElementById('summaryTotal').textContent = Number(est.total||0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summaryGst')) document.getElementById('summaryGst').textContent = Number(est.gst||0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summaryGrandTotal')) document.getElementById('summaryGrandTotal').textContent = Number(est.grand_total||0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summaryDiscount')) document.getElementById('summaryDiscount').textContent = Number(est.discount||0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summaryFinalAmount')) document.getElementById('summaryFinalAmount').textContent = Number(est.final_amount||0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summarySavings')) document.getElementById('summarySavings').textContent = Number(est.discount||0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+        } else {
+            updateSummary();
+        }
+    } catch (err) {
+        console.error('Error loading estimate items', err);
     }
 }
 
@@ -489,7 +537,7 @@ function calculateAmount() {
 }
 
 // Add item to estimate table
-function addToEstimate() {
+async function addToEstimate() {
     const materialSelect = document.getElementById('materialSelect');
     const finishSelect = document.getElementById('finishSelect');
     const unitSelect = document.getElementById('unitSelect');
@@ -520,8 +568,8 @@ function addToEstimate() {
         }
     }
 
-    // Add to estimate items array
-    estimateItems.push({
+    // Build item payload
+    const itemPayload = {
         area: areaName,
         element: currentElement,
         material: material,
@@ -531,18 +579,103 @@ function addToEstimate() {
         quantity: quantity,
         rate: rate,
         amount: amount,
-        amountValue: parseFloat((amount || '').toString().replace(/,/g, '')) || 0,
         floor: floor
-    });
+    };
+    // Attach property_type/selection per-item
+    itemPayload.property_type = document.getElementById('propertyType')?.value || '';
+    itemPayload.property_selection = collectPropertySelection();
 
-    // Render the estimate table
-    renderEstimateTable();
+    // Persist to server: create draft if needed, then add item
+    try {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
-    // Update summary
-    updateSummary();
+        if (!currentEstimateId) {
+            // create draft header
+            const headerPayload = {
+                bi_executive: document.getElementById('biExecutive')?.value || '',
+                client_name: document.getElementById('clientName')?.value || '',
+                property_type: document.getElementById('propertyType')?.value || '',
+                property_selection: collectPropertySelection(),
+                estimate_date: document.getElementById('estimateDate')?.value || null,
+                expiry_date: document.getElementById('expiryDate')?.value || null
+            };
 
-    // Reset form
-    cancelElement();
+            const res = await fetch('/estimate/draft', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token || ''
+                },
+                body: JSON.stringify(headerPayload)
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+                console.error('Draft creation failed', res.status, text);
+                alert(`Failed to create draft: ${res.status} - ${text.substring(0,300)}`);
+                return;
+            }
+
+            const json = await res.json();
+            currentEstimateId = json.estimate_id;
+            const lastSavedEl = document.getElementById('lastSavedBid');
+            if (lastSavedEl) lastSavedEl.textContent = `Last saved BID: ${json.bid}`;
+        }
+
+        // now add the item (attach discountPercent so server calculates discount if provided)
+        const resItem = await fetch(`/estimate/${currentEstimateId}/item`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token || ''
+            },
+            body: JSON.stringify(Object.assign({}, itemPayload, {
+                discount_percent: parseFloat(document.getElementById('discountPercent')?.value) || 15
+            }))
+        });
+
+        if (!resItem.ok) {
+            const text = await resItem.text();
+            console.error('Add item failed', resItem.status, text);
+            alert(`Failed to add item: ${resItem.status} - ${text.substring(0,300)}`);
+            return;
+        }
+
+        const itemJson = await resItem.json();
+
+        // Append the returned item to local array (include server id)
+        estimateItems.push({
+            id: itemJson.item_id || null,
+            ...itemPayload,
+            amountValue: parseFloat((itemPayload.amount || '').toString().replace(/,/g, '')) || 0
+        });
+
+        // Render the estimate table
+        renderEstimateTable();
+
+        // If server returned totals, apply them to UI (use locale formatting)
+        if (itemJson.totals) {
+            const t = itemJson.totals;
+            if (document.getElementById('summaryTotal')) document.getElementById('summaryTotal').textContent = Number(t.total).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summaryGst')) document.getElementById('summaryGst').textContent = Number(t.gst).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summaryGrandTotal')) document.getElementById('summaryGrandTotal').textContent = Number(t.grand_total).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summaryDiscount')) document.getElementById('summaryDiscount').textContent = Number(t.discount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summaryFinalAmount')) document.getElementById('summaryFinalAmount').textContent = Number(t.final_amount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            if (document.getElementById('summarySavings')) document.getElementById('summarySavings').textContent = Number(t.discount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+        } else {
+            // fallback to client-side summary
+            updateSummary();
+        }
+
+        // Reset form
+        cancelElement();
+
+    } catch (err) {
+        console.error('Error adding to estimate', err);
+        alert('An error occurred while adding the item. See console for details.');
+    }
 }
 
 // Render estimate table with area grouping
@@ -897,3 +1030,122 @@ function exportExcel() {
     XLSX.utils.book_append_sheet(wb, ws, "Estimate");
     XLSX.writeFile(wb, `Bhavana_Interiors_Estimate_${document.getElementById('clientName')?.value || 'Client'}.xlsx`);
 }
+
+// Collect property selection text for storing
+function collectPropertySelection() {
+    const propertyType = document.getElementById('propertyType')?.value || '';
+    if (propertyType === 'apartment') {
+        const selected = document.querySelector('input[name="property"]:checked');
+        return selected ? selected.value : '';
+    } else if (propertyType === 'villa') {
+        const selectedFloors = Array.from(document.querySelectorAll('.floor-checkbox input[type="checkbox"]:checked')).map(cb => cb.value);
+        return selectedFloors.join(', ');
+    }
+    return '';
+}
+
+// Collect totals from the summary section for payload
+function collectTotals() {
+    const total = parseFloat((document.getElementById('summaryTotal')?.textContent || '0').toString().replace(/,/g, '')) || 0;
+    const gst = parseFloat((document.getElementById('summaryGst')?.textContent || '0').toString().replace(/,/g, '')) || 0;
+    const grandTotal = parseFloat((document.getElementById('summaryGrandTotal')?.textContent || '0').toString().replace(/,/g, '')) || 0;
+    const discount = parseFloat((document.getElementById('summaryDiscount')?.textContent || '0').toString().replace(/,/g, '')) || 0;
+    const finalAmount = parseFloat((document.getElementById('summaryFinalAmount')?.textContent || '0').toString().replace(/,/g, '')) || 0;
+    return { total, gst, grandTotal, discount, finalAmount };
+}
+
+// Handler: Save the entire estimate to server
+document.addEventListener('DOMContentLoaded', function() {
+    const saveBtn = document.getElementById('saveEstimate');
+    if (!saveBtn) return;
+
+    saveBtn.addEventListener('click', async function() {
+        if (!estimateItems || estimateItems.length === 0) {
+            alert('Add at least one estimate item before saving.');
+            return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        const payload = {
+            bi_executive: document.getElementById('biExecutive')?.value || '',
+            client_name: document.getElementById('clientName')?.value || '',
+            property_type: document.getElementById('propertyType')?.value || '',
+            property_selection: collectPropertySelection(),
+            estimate_date: document.getElementById('estimateDate')?.value || null,
+            expiry_date: document.getElementById('expiryDate')?.value || null,
+            items: estimateItems.map(it => ({
+                serial: it.serial || null,
+                property_type: it.property_type || document.getElementById('propertyType')?.value || '',
+                property_selection: it.property_selection || collectPropertySelection(),
+                area: it.area,
+                element: it.element,
+                material: it.material,
+                finish: it.finish,
+                dimensions: it.dimensions,
+                unit: it.unit,
+                quantity: it.quantity,
+                rate: it.rate,
+                amount: it.amount,
+                floor: it.floor
+            })),
+        };
+
+        // add totals
+        const totals = collectTotals();
+        payload.total = totals.total;
+        payload.gst = totals.gst;
+        payload.grand_total = totals.grandTotal;
+        payload.discount = totals.discount;
+        payload.final_amount = totals.finalAmount;
+
+        try {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const res = await fetch('/estimate/store', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token || ''
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+                console.error('Save failed', res.status, text);
+                // Show a trimmed server response to the user to help debug (avoid flooding alert)
+                alert(`Save failed: ${res.status} - ${text.substring(0, 300)}`);
+                throw new Error(`Save failed: ${res.status}`);
+            }
+
+            const data = await res.json();
+            alert(`Estimate saved successfully. BID: ${data.bid}`);
+
+            // Show last saved BID in the page
+            const lastSavedEl = document.getElementById('lastSavedBid');
+            if (lastSavedEl) lastSavedEl.textContent = `Last saved BID: ${data.bid}`;
+
+            // Set currentEstimateId to returned id so we can load persisted items
+            if (data.estimate_id) {
+                currentEstimateId = data.estimate_id;
+                await loadEstimateItems(currentEstimateId);
+            } else {
+                // Reset client-side state if no id returned
+                estimateItems = [];
+                groupedItems = {};
+                renderEstimateTable();
+                updateSummary();
+            }
+
+        } catch (err) {
+            console.error('Save error', err);
+            alert(`Failed to save estimate: ${err.message}. See console for full details.`);
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Estimate';
+        }
+    });
+});
+
