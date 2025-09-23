@@ -20,6 +20,7 @@ Route::middleware(['auth', \App\Http\Middleware\PreventBackHistory::class])->gro
     Route::get('/clients/{id}/edit', [App\Http\Controllers\ClientController::class, 'edit'])->name('clients.edit');
     Route::put('/clients/{id}', [App\Http\Controllers\ClientController::class, 'update'])->name('clients.update');
     Route::delete('/clients/{id}', [App\Http\Controllers\ClientController::class, 'destroy'])->name('clients.destroy');
+    Route::get('/estimate', [App\Http\Controllers\EstimateController::class, 'index'])->name('estimate.index');
 });
 
 
