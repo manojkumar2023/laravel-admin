@@ -363,9 +363,9 @@
             </div>
 
             <div class="greeting">
-                <p>Greetings from <strong>Bhavana Interiors & Decorators</strong>,</p>
+                <!-- <p>Greetings from <strong>Bhavana Interiors & Decorators</strong>,</p>
                 <p>Thank you for considering Bhavana Interiors & Decorators for your project! We specialize in customized interior solutions using premium, ISI-grade materials and in-house production for unmatched quality. Our expert team delivers tailored designs—from modular kitchens to wardrobes & more—ensuring durability, aesthetics, and precision.</p>
-                <p>Below is a detailed estimate reflecting your requirements. Every product is crafted under strict quality control, offering seamless finishes and timeless elegance.</p>
+                <p>Below is a detailed estimate reflecting your requirements. Every product is crafted under strict quality control, offering seamless finishes and timeless elegance.</p> -->
                 <p>Let's bring your vision to life with perfection. For any modifications or queries, feel free to reach out.</p>
             </div>
 
