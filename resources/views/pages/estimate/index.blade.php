@@ -323,7 +323,77 @@
         </div>
 
     <!-- Hidden container for PDF export (hidden by default to avoid duplicate visible summary) -->
-    <div id="pdfExportContainer" class="pdf-export-container" style="display:none;">
+    <style>
+        /* PDF export styling: A4-like width, margins, fonts and page-break hints */
+        #pdfExportContainer {
+            display: none; /* still hidden in UI until export */
+            background: #fff;
+            color: #222;
+            font-family: Arial, Helvetica, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* A4 @ 96dpi ~ 794px width; apply padding (20mm) to create printable margins */
+        #pdfExportContainer .pdf-page {
+            width: 794px;
+            min-height: 1123px; /* A4 height at 96dpi */
+            /* increase bottom padding to create larger gap before footer */
+            padding: 20mm 20mm 45mm 20mm; /* top right bottom left */
+            box-sizing: border-box;
+            background: #fff;
+            position: relative;
+        }
+
+        #pdfExportContainer .header .logo img {
+            max-width: 120px;
+            height: auto;
+            display: block;
+        }
+
+        /* Watermark - centered and subtle */
+        #pdfExportContainer .pdf-watermark img {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.06;
+            max-width: 60%;
+            height: auto;
+            pointer-events: none;
+        }
+
+        /* Tables and text sizing for print */
+        #pdfExportContainer table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        #pdfExportContainer table th, #pdfExportContainer table td { padding: 6px 8px; border: 1px solid #e6e6e6; vertical-align: top; }
+        #pdfExportContainer .company-info h1 { font-size: 16px; margin: 0 0 4px 0; }
+        #pdfExportContainer .detail-group { margin-bottom: 6px; }
+
+        /* Prevent breaking inside important rows/sections where possible */
+        #pdfExportContainer .area-header, #pdfExportContainer tbody tr { page-break-inside: avoid; break-inside: avoid; }
+
+        /* Try to keep the Summary section together and avoid splitting its rows across pages */
+        #pdfExportContainer .summary-section, #pdfExportContainer .summary-table, #pdfExportContainer .summary-table thead, #pdfExportContainer .summary-table tbody, #pdfExportContainer .summary-table tfoot {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        #pdfExportContainer .summary-table thead { display: table-header-group; }
+        #pdfExportContainer .summary-table tfoot { display: table-footer-group; }
+
+        /* Footer styling */
+        #pdfExportContainer .pdf-footer {
+            margin-top: 28px;
+            padding: 14px 8px 8px 8px;
+            border-top: 1px solid #e6e6e6;
+            font-size: 11px;
+            color: #333;
+            clear: both;
+            background: #fff; /* ensure footer text is on white background */
+            box-shadow: 0 -1px 0 rgba(0,0,0,0.02) inset;
+        }
+    </style>
+
+    <div id="pdfExportContainer" class="pdf-export-container">
+        <div class="pdf-page">
             <div class="pdf-watermark">
                 <img src="https://rangdebasanti.com/newsample1/wp-content/uploads/2025/04/logo-white.jpg" alt="Watermark">
             </div>
@@ -342,27 +412,27 @@
             <div class="client-details">
                 <div class="detail-group">
                     <label>BI Executive</label>
-                    <div id="pdf-biExecutive"></div>
+                    <div id="pdf-biExecutive" style="color: #000;"></div>
                 </div>
                 <div class="detail-group">
                     <label>Client Name</label>
-                    <div id="pdf-clientName"></div>
+                    <div id="pdf-clientName" style="color: #000;"></div>
                 </div>
                 <div class="detail-group">
                     <label>Property Type</label>
-                    <div id="pdf-propertyType"></div>
+                    <div id="pdf-propertyType" style="color: #000;"></div>
                 </div>
                 <div class="detail-group">
                     <label>Estimate Date</label>
-                    <div id="pdf-estimateDate"></div>
+                    <div id="pdf-estimateDate" style="color: #000;"></div>
                 </div>
                 <div class="detail-group">
                     <label>Estimate Expiry Date</label>
-                    <div id="pdf-expiryDate"></div>
+                    <div id="pdf-expiryDate" style="color: #000;"></div>
                 </div>
             </div>
 
-            <div class="greeting">
+            <div class="greeting" style="margin-bottom: 250px;">
                 <p>Greetings from <strong>Bhavana Interiors & Decorators</strong>,</p>
                 <p>Thank you for considering Bhavana Interiors & Decorators for your project! We specialize in customized interior solutions using premium, ISI-grade materials and in-house production for unmatched quality. Our expert team delivers tailored designs—from modular kitchens to wardrobes & more—ensuring durability, aesthetics, and precision.</p>
                 <p>Below is a detailed estimate reflecting your requirements. Every product is crafted under strict quality control, offering seamless finishes and timeless elegance.</p>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\EstimateSerial;
@@ -66,7 +67,8 @@ class EstimateController extends Controller
                     'grand_total' => $data['grand_total'] ?? 0,
                     'discount' => $data['discount'] ?? 0,
                     'final_amount' => $data['final_amount'] ?? 0,
-                    'primary_serial' => $primary
+                    'primary_serial' => $primary,
+                    'user_id' => Auth::id() ?? null
                 ]);
             }
 
@@ -132,7 +134,8 @@ class EstimateController extends Controller
                 // property_type/property_selection are stored per-item
                 'estimate_date' => $data['estimate_date'] ?? null,
                 'expiry_date' => $data['expiry_date'] ?? null,
-                'primary_serial' => $primary
+                'primary_serial' => $primary,
+                'user_id' => Auth::id() ?? null
             ]);
 
             return ['bid' => $bid, 'estimate_id' => $estimate->id];

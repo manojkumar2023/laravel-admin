@@ -178,16 +178,24 @@ function updatePdfValues() {
     const prop = document.getElementById('propertyType');
     const est = document.getElementById('estimateDate');
     const exp = document.getElementById('expiryDate');
-    if (document.getElementById('pdf-biExecutive')) document.getElementById('pdf-biExecutive').textContent = bi ? bi.value : '';
-    if (document.getElementById('pdf-clientName')) document.getElementById('pdf-clientName').textContent = client ? client.value : '';
+    // There may be duplicate pdf-* placeholders (visible helper and hidden export container).
+    // Update ALL matches so the hidden export container receives the values used by html2canvas.
+    const setAll = (selector, value) => {
+        document.querySelectorAll(selector).forEach(el => { el.textContent = value || ''; });
+    };
+
+    setAll('#pdf-biExecutive', bi ? bi.value : '');
+    setAll('#pdf-clientName', client ? client.value : '');
 
     if (prop) {
         const propertyTypeText = prop.options[prop.selectedIndex]?.text || '';
-        if (document.getElementById('pdf-propertyType')) document.getElementById('pdf-propertyType').textContent = propertyTypeText;
+        setAll('#pdf-propertyType', propertyTypeText);
+    } else {
+        setAll('#pdf-propertyType', '');
     }
 
-    if (est && document.getElementById('pdf-estimateDate')) document.getElementById('pdf-estimateDate').textContent = est.value;
-    if (exp && document.getElementById('pdf-expiryDate')) document.getElementById('pdf-expiryDate').textContent = exp.value;
+    setAll('#pdf-estimateDate', est ? est.value : '');
+    setAll('#pdf-expiryDate', exp ? exp.value : '');
 
     // Update property/floor selection in PDF
     const propertyType = prop ? prop.value : '';
@@ -1156,25 +1164,139 @@ function shareWhatsapp() {
 
 // Export as PDF - optimized version
 function exportPdf() {
+    // Ensure PDF header fields and tables are up-to-date
     updatePdfValues();
     updatePdfSummary();
     updatePdfEstimateTable();
+
+    // Populate PDF header fields explicitly from current inputs/state
+    try {
+        // Populate ALL pdf-* placeholders (visible helpers + hidden export container)
+        const readVal = (id) => {
+            const el = document.getElementById(id);
+            if (!el) {
+                console.warn(`updatePdf: element #${id} not found`);
+                return '';
+            }
+            const tag = (el.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'select' || tag === 'textarea') return el.value || '';
+            return (el.textContent || el.innerText || '').toString();
+        };
+
+        const biVal = readVal('biExecutive');
+        const clientVal = readVal('clientName');
+        const estVal = readVal('estimateDate');
+        const expVal = readVal('expiryDate');
+
+        const setAllSelector = (id, text) => {
+            document.querySelectorAll('#' + id).forEach(el => el.textContent = text || '');
+        };
+
+        setAllSelector('pdf-biExecutive', biVal);
+        setAllSelector('pdf-clientName', clientVal);
+        setAllSelector('pdf-estimateDate', estVal);
+        setAllSelector('pdf-expiryDate', expVal);
+
+        // Build property type display plus selection (apartment floors / villa floors) and unique areas list
+        const propSelect = document.getElementById('propertyType');
+        const propertyTypeText = propSelect ? (propSelect.options[propSelect.selectedIndex]?.text || '') : '';
+        const propSelectionText = collectPropertySelection();
+        const uniqueAreas = Array.from(new Set((estimateItems || []).map(it => (it.area || '').toString().trim()).filter(Boolean)));
+        let propTextParts = [];
+        if (propertyTypeText) propTextParts.push(propertyTypeText);
+        if (propSelectionText) propTextParts.push(propSelectionText);
+        if (uniqueAreas.length) {
+            const displayAreas = uniqueAreas.map(a => {
+                for (const k in areaDisplayNames) {
+                    if (areaDisplayNames[k] === a || k === a) return areaDisplayNames[k];
+                }
+                return a;
+            });
+            propTextParts.push(displayAreas.join(', '));
+        }
+        const propText = propTextParts.join(' – ');
+        if (pdfProp) pdfProp.textContent = propText;
+    } catch (err) {
+        console.warn('Failed to populate PDF header fields', err);
+    }
 
     const pdfContainer = document.getElementById('pdfExportContainer');
     if (!pdfContainer) return;
 
     const pdfFooter = document.querySelector('.pdf-footer');
     if (pdfFooter) {
-        pdfFooter.innerHTML = `...`;
+        // Footer: contact + approval block
+        pdfFooter.innerHTML = `
+            <div style="font-size:12px;display:flex;justify-content:space-between;align-items:flex-end;">
+                <div>
+                    <strong>Bhavana Interiors & Decorators</strong><br>
+                    No.96/5, 1st Floor, Dhruv Palace, Navya Nagar, Jakkur, Bangalore - 560064<br>
+                    Website: www.bhavanainteriordecorators.com | Email: info@bhavanainteriordecorators.com | Phone: 9902571049
+                </div>
+                <div style="text-align:right;">
+                    <div>Prepared by: ____________________</div>
+                    <div>Approved by: ____________________</div>
+                </div>
+            </div>
+        `;
     }
 
-    html2canvas(pdfContainer, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        width: pdfContainer.scrollWidth,
-        height: pdfContainer.scrollHeight
-    }).then(canvas => {
+    // html2canvas cannot render elements with display:none. Temporarily make the container visible
+    // and position it off-screen to avoid layout shifts for users.
+    const originalDisplay = pdfContainer.style.display;
+    const originalPosition = pdfContainer.style.position;
+    const originalLeft = pdfContainer.style.left;
+    const originalTop = pdfContainer.style.top;
+    const originalWidth = pdfContainer.style.width;
+
+    // Add a bottom spacer to guarantee extra space before the footer. This prevents the
+    // last table rows from being rendered too close to the bottom and overlapping the footer page.
+    const pdfPage = pdfContainer.querySelector('.pdf-page');
+    let spacerEl = null;
+    if (pdfPage) {
+        spacerEl = document.createElement('div');
+        spacerEl.className = 'pdf-bottom-spacer';
+        // generous spacer: 60mm (can be reduced if needed)
+        spacerEl.style.height = '60mm';
+        spacerEl.style.width = '100%';
+        spacerEl.style.display = 'block';
+        pdfPage.appendChild(spacerEl);
+    }
+
+    try {
+        pdfContainer.style.display = 'block';
+        pdfContainer.style.position = 'absolute';
+        pdfContainer.style.left = '-9999px';
+        pdfContainer.style.top = '0';
+        // set a printable width to make canvas sizing consistent (A4 width ~ 210mm -> 794px at 96dpi)
+        pdfContainer.style.width = '794px';
+
+        // Hide the DOM footer while capturing the body so it doesn't overlap content in the final pages.
+        const footerEl = pdfContainer.querySelector('.pdf-footer');
+        const originalFooterDisplay = footerEl ? footerEl.style.display : null;
+        if (footerEl) footerEl.style.display = 'none';
+
+        // Allow the browser a short moment to apply the updated pdf-* values to the DOM
+        console.debug('exportPdf: header values', {
+            bi: (document.getElementById('pdf-biExecutive')?.textContent || '').toString().trim(),
+            client: (document.getElementById('pdf-clientName')?.textContent || '').toString().trim(),
+            estimateDate: (document.getElementById('pdf-estimateDate')?.textContent || '').toString().trim(),
+            expiryDate: (document.getElementById('pdf-expiryDate')?.textContent || '').toString().trim()
+        });
+
+        setTimeout(() => {
+            html2canvas(pdfContainer, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                width: pdfContainer.scrollWidth,
+                height: pdfContainer.scrollHeight
+            }).then(canvas => {
+
+                // restore footer display in DOM
+                if (footerEl) footerEl.style.display = originalFooterDisplay;
+                // remove spacer used to reserve space for footer
+                if (spacerEl && spacerEl.parentNode) spacerEl.parentNode.removeChild(spacerEl);
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         const imgData = canvas.toDataURL('image/jpeg', 1.0);
@@ -1194,9 +1316,159 @@ function exportPdf() {
             heightLeft -= doc.internal.pageSize.getHeight();
         }
 
-        const clientName = document.getElementById('clientName')?.value || 'Client';
-        doc.save(`Bhavana_Interiors_Estimate_${clientName}.pdf`);
-    });
+        // Overlay specific header fields as real PDF text so they remain selectable/searchable.
+        try {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Compute scaling factors between captured canvas pixels and PDF mm units
+            const canvasW = canvas.width;
+            const canvasH = canvas.height;
+            const imgH = (canvasH * imgWidth) / canvasW; // mm height used for image
+            const scaleX = imgWidth / canvasW; // mm per px
+            const scaleY = imgH / canvasH; // mm per px (y)
+
+            function getOffsetRelative(el, ancestor) {
+                let top = 0, left = 0;
+                let node = el;
+                while (node && node !== ancestor) {
+                    top += node.offsetTop || 0;
+                    left += node.offsetLeft || 0;
+                    node = node.offsetParent;
+                }
+                return { top, left };
+            }
+
+            const overlayIds = ['pdf-biExecutive','pdf-clientName','pdf-estimateDate','pdf-expiryDate'];
+            doc.setFont('helvetica');
+            doc.setTextColor(20,20,20);
+            doc.setFontSize(11);
+
+            overlayIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const text = (el.textContent || '').toString().trim();
+                if (!text) return;
+
+                const offset = getOffsetRelative(el, pdfContainer);
+                // Convert element position (px) to mm within the image
+                const xMm = offset.left * scaleX;
+                const yMm = offset.top * scaleY;
+
+                // Determine page index where this Y falls (1-based)
+                const pageIndex = Math.floor(yMm / pageHeight) + 1;
+                const yOnPage = yMm - (pageIndex - 1) * pageHeight + 2; // small top padding
+
+                // Draw text on the correct page
+                if (pageIndex <= doc.getNumberOfPages()) {
+                    doc.setPage(pageIndex);
+                    // Clip long text to page width to avoid overflow
+                    const maxTextWidth = pageWidth - xMm - 14; // right margin
+                    const split = doc.splitTextToSize(text, maxTextWidth);
+                    // doc.text(split, xMm, yOnPage);
+                }
+            });
+        } catch (err) {
+            console.warn('Failed to overlay header fields as text', err);
+        }
+
+        // Fallback: always draw the four header fields as normal text on the first page
+        try {
+            const firstPage = 1;
+            doc.setPage(firstPage);
+            doc.setFontSize(11);
+            doc.setTextColor(20,20,20);
+
+            const biText = (document.getElementById('pdf-biExecutive')?.textContent || '').toString().trim();
+            const clientText = (document.getElementById('pdf-clientName')?.textContent || '').toString().trim();
+            const estText = (document.getElementById('pdf-estimateDate')?.textContent || '').toString().trim();
+            const expText = (document.getElementById('pdf-expiryDate')?.textContent || '').toString().trim();
+
+            // Fixed positions (mm) — tuned for the current header layout
+            const leftX = 24; // left margin inside A4
+            let y = 62; // starting Y for first field (slightly below header)
+            const gap = 7; // vertical gap between fields
+
+            // Draw the header fields as plain text on the first page so they always appear.
+            doc.setFontSize(10);
+            const leftLabelX = leftX;
+            const leftValueX = leftX + 50; // value offset to align after label
+        } catch (err) {
+            console.warn('Failed to draw fixed header fields', err);
+        }
+
+        // After adding body pages, append a dedicated footer page so footer doesn't overlap body content
+        try {
+            const pageCountBeforeFooter = doc.getNumberOfPages();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Add footer page
+            doc.addPage();
+            const footerPageIndex = doc.getNumberOfPages();
+
+            // Draw footer content on footer-only page
+            doc.setFontSize(11);
+            const leftX = 14; // 10mm margin approx (units are mm)
+            let y = 30;
+            doc.text('Bhavana Interiors & Decorators', leftX, y);
+            doc.setFontSize(9);
+            y += 6;
+            doc.text('No.96/5, 1st Floor, Dhruv Palace, Navya Nagar, Jakkur, Bangalore - 560064', leftX, y);
+            y += 5;
+            doc.text('Website: www.bhavanainteriordecorators.com | Email: info@bhavanainteriordecorators.com | Phone: 9902571049', leftX, y);
+
+            // Approval lines on right
+            const rightX = pageWidth - 80;
+            let ay = 30;
+            doc.text('Prepared by:', rightX, ay);
+            ay += 12;
+            doc.text('________________________', rightX, ay);
+            ay += 14;
+            doc.text('Approved by:', rightX, ay);
+            ay += 12;
+            doc.text('________________________', rightX, ay);
+
+            // Now add page numbers and small contact text to all pages (including footer)
+            const finalPageCount = doc.getNumberOfPages();
+            doc.setFontSize(9);
+            // Add page numbers only. Do NOT draw the contact text on every page —
+            // drawing extra text over the rasterized canvas can appear to overlay content if the
+            // canvas/page slicing alignment differs across browsers. The contact and approval
+            // information is placed on the dedicated footer-only page instead.
+            for (let i = 1; i <= finalPageCount; i++) {
+                doc.setPage(i);
+                const pageText = `Page ${i} of ${finalPageCount}`;
+                doc.text(pageText, pageWidth - 10, pageHeight - 8, { align: 'right' });
+            }
+
+            const clientName = (document.getElementById('clientName')?.value || 'Client').replace(/[^a-z0-9\-_ ]/gi, '_');
+            doc.save(`Bhavana_Interiors_Estimate_${clientName}.pdf`);
+        } catch (err) {
+            console.warn('Failed to add footer page or page numbers', err);
+            const clientName = (document.getElementById('clientName')?.value || 'Client').replace(/[^a-z0-9\-_ ]/gi, '_');
+            doc.save(`Bhavana_Interiors_Estimate_${clientName}.pdf`);
+        }
+        // restore original styles
+        pdfContainer.style.display = originalDisplay;
+        pdfContainer.style.position = originalPosition;
+        pdfContainer.style.left = originalLeft;
+        pdfContainer.style.top = originalTop;
+        pdfContainer.style.width = originalWidth;
+            });
+        }, 50);
+    } catch (err) {
+        console.error('exportPdf error', err);
+        // restore styles on error as well
+        pdfContainer.style.display = originalDisplay;
+        pdfContainer.style.position = originalPosition;
+        pdfContainer.style.left = originalLeft;
+        pdfContainer.style.top = originalTop;
+        pdfContainer.style.width = originalWidth;
+        // remove spacer if present
+        if (spacerEl && spacerEl.parentNode) spacerEl.parentNode.removeChild(spacerEl);
+        alert('Failed to export PDF. See console for details.');
+    }
 }
 
 // Update PDF summary table
