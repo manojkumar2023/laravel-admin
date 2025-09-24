@@ -206,6 +206,32 @@ function updatePdfValues() {
     }
 }
 
+// Helper: parse response as JSON but detect HTML (login page) and handle it
+async function parseJsonResponse(res) {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.indexOf('application/json') !== -1) {
+        return await res.json();
+    }
+
+    // If we got HTML instead of JSON, read text and decide
+    const text = await res.text();
+    console.error('Expected JSON but received HTML', res.status, text.substring(0, 1000));
+    // Common Laravel login markers
+    if (res.status === 419 || /csrf|token/i.test(text)) {
+        alert('Session expired or CSRF token missing. Please refresh the page and login again.');
+        window.location.reload();
+        throw new Error('Session/CSRF');
+    }
+    if (res.status === 302 || /<title>Laravel<\/title>/i.test(text) || /login/i.test(text)) {
+        alert('Not authenticated — you may have been redirected to the login page. Please login and retry.');
+        window.location.href = '/login';
+        throw new Error('Not authenticated');
+    }
+
+    // Unknown HTML response - throw to be caught by caller
+    throw new Error('Unexpected HTML response');
+}
+
 // (Large data structures omitted in this comment - they are included below in the file)
 
 // Define elements for each area
@@ -397,11 +423,20 @@ function updateElements() {
 async function loadEstimateItems(estimateId) {
     try {
         const res = await fetch(`/estimate/${estimateId}/items`, { credentials: 'same-origin' });
+    // prefer JSON responses
         if (!res.ok) {
-            console.error('Failed to load estimate items', res.status);
+            const text = await res.text();
+            console.error('Failed to load estimate items', res.status, text);
+            if (res.status === 419) {
+                alert('Session expired or CSRF token missing (419). Please refresh and login.');
+            } else if (res.status === 302 || /login/i.test(text)) {
+                alert('Not authenticated - you may have been redirected to login. Please login and try again.');
+            } else {
+                alert(`Failed to load saved items: ${res.status} - ${text.substring(0,300)}`);
+            }
             return;
         }
-        const json = await res.json();
+    const json = await parseJsonResponse(res);
         // Map server items into local shape
         estimateItems = (json.items || []).map(it => ({
             id: it.id,
@@ -605,6 +640,7 @@ async function addToEstimate() {
                 credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': token || ''
                 },
                 body: JSON.stringify(headerPayload)
@@ -613,14 +649,22 @@ async function addToEstimate() {
             if (!res.ok) {
                 const text = await res.text();
                 console.error('Draft creation failed', res.status, text);
-                alert(`Failed to create draft: ${res.status} - ${text.substring(0,300)}`);
+                if (res.status === 419) {
+                    alert('Session expired or CSRF token missing (419). Please refresh the page and login again.');
+                } else if (res.status === 302 || /login/i.test(text)) {
+                    alert('Not authenticated. You may have been redirected to the login page. Please login and try again.');
+                } else {
+                    alert(`Failed to create draft: ${res.status} - ${text.substring(0,300)}`);
+                }
                 return;
             }
 
-            const json = await res.json();
+            const json = await parseJsonResponse(res);
             currentEstimateId = json.estimate_id;
             const lastSavedEl = document.getElementById('lastSavedBid');
             if (lastSavedEl) lastSavedEl.textContent = `Last saved BID: ${json.bid}`;
+            // load any persisted items immediately so the grid is in sync
+            try { await loadEstimateItems(currentEstimateId); } catch(e) { console.warn('Could not load items after draft creation', e); }
         }
 
         // now add the item (attach discountPercent so server calculates discount if provided)
@@ -629,6 +673,7 @@ async function addToEstimate() {
             credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
                 'X-CSRF-TOKEN': token || ''
             },
             body: JSON.stringify(Object.assign({}, itemPayload, {
@@ -639,18 +684,44 @@ async function addToEstimate() {
         if (!resItem.ok) {
             const text = await resItem.text();
             console.error('Add item failed', resItem.status, text);
-            alert(`Failed to add item: ${resItem.status} - ${text.substring(0,300)}`);
+            if (resItem.status === 419) {
+                alert('Session expired or CSRF token missing (419). Please refresh the page and login again.');
+            } else if (resItem.status === 302 || /login/i.test(text)) {
+                alert('Not authenticated. You may have been redirected to the login page. Please login and try again.');
+            } else {
+                alert(`Failed to add item: ${resItem.status} - ${text.substring(0,300)}`);
+            }
             return;
         }
 
-        const itemJson = await resItem.json();
+    const itemJson = await parseJsonResponse(resItem);
 
-        // Append the returned item to local array (include server id)
-        estimateItems.push({
-            id: itemJson.item_id || null,
-            ...itemPayload,
-            amountValue: parseFloat((itemPayload.amount || '').toString().replace(/,/g, '')) || 0
-        });
+        // Append the authoritative returned item to local array
+        if (itemJson.item) {
+            const it = itemJson.item;
+            estimateItems.push({
+                id: it.id,
+                property_type: it.property_type || '',
+                property_selection: it.property_selection || '',
+                area: it.area,
+                element: it.element,
+                material: it.material,
+                finish: it.finish,
+                dimensions: it.dimensions,
+                unit: it.unit,
+                quantity: it.quantity,
+                rate: it.rate,
+                amount: it.amount,
+                amountValue: parseFloat(it.amount) || 0,
+                floor: it.floor
+            });
+        } else {
+            estimateItems.push({
+                id: itemJson.item_id || null,
+                ...itemPayload,
+                amountValue: parseFloat((itemPayload.amount || '').toString().replace(/,/g, '')) || 0
+            });
+        }
 
         // Render the estimate table
         renderEstimateTable();
@@ -704,6 +775,7 @@ function renderEstimateTable() {
 
         groupedItems[group].forEach((item, index) => {
             const row = document.createElement('tr');
+            if (item.id) row.setAttribute('data-id', item.id);
             row.innerHTML = `
                 <td>${item.area}</td>
                 <td>${item.element}</td>
@@ -781,12 +853,128 @@ function updateSummary() {
 function applyDiscount() { updateSummary(); }
 
 // Edit item (placeholder)
+// Edit item - open a simple modal to edit quantity, rate, amount and property fields
 function editItem(group, index) {
-    alert('Edit functionality would be implemented here.');
+    // Find flat index
+    let flatIndex = -1;
+    let count = 0;
+    for (let i = 0; i < estimateItems.length; i++) {
+        const item = estimateItems[i];
+        const itemGroup = item.floor ? `${item.floor} - ${item.area}` : item.area;
+        if (itemGroup === group) {
+            if (count === index) { flatIndex = i; break; }
+            count++;
+        }
+    }
+    if (flatIndex < 0) return;
+    const item = estimateItems[flatIndex];
+
+    // Build modal if not present
+    let modal = document.getElementById('editItemModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'editItemModal';
+        modal.style.position = 'fixed';
+        modal.style.left = '50%';
+        modal.style.top = '50%';
+        modal.style.transform = 'translate(-50%, -50%)';
+        modal.style.background = '#fff';
+        modal.style.padding = '16px';
+        modal.style.zIndex = 9999;
+        modal.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+        modal.innerHTML = `
+            <h3>Edit Item</h3>
+            <div>
+                <label>Quantity: <input id="edit_qty" type="number" step="any"></label>
+            </div>
+            <div>
+                <label>Rate: <input id="edit_rate" type="text"></label>
+            </div>
+            <div>
+                <label>Amount: <input id="edit_amount" type="text"></label>
+            </div>
+            <div>
+                <label>Property Type: <select id="edit_property_type"><option value="">--</option><option value="apartment">Apartment</option><option value="villa">Villa</option><option value="office">Office</option></select></label>
+            </div>
+            <div>
+                <label>Property Selection: <input id="edit_property_selection" type="text"></label>
+            </div>
+            <div style="margin-top:8px">
+                <button id="edit_save">Save</button>
+                <button id="edit_cancel">Cancel</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.getElementById('edit_cancel').addEventListener('click', () => { modal.remove(); });
+    }
+
+    // Populate values
+    document.getElementById('edit_qty').value = item.quantity || 0;
+    document.getElementById('edit_rate').value = item.rate || '';
+    document.getElementById('edit_amount').value = item.amount || '';
+    document.getElementById('edit_property_type').value = item.property_type || '';
+    document.getElementById('edit_property_selection').value = item.property_selection || '';
+
+    // Hook save
+    document.getElementById('edit_save').onclick = async function() {
+        const newQty = parseFloat(document.getElementById('edit_qty').value) || 0;
+        const newRate = document.getElementById('edit_rate').value || '0';
+        const newAmount = document.getElementById('edit_amount').value || '0';
+        const newPropType = document.getElementById('edit_property_type').value || '';
+        const newPropSel = document.getElementById('edit_property_selection').value || '';
+
+        // Update locally immediately for responsiveness
+        item.quantity = newQty;
+        item.rate = newRate;
+        item.amount = newAmount;
+        item.amountValue = parseFloat((newAmount || '').toString().replace(/,/g, '')) || 0;
+        item.property_type = newPropType;
+        item.property_selection = newPropSel;
+        renderEstimateTable();
+        updateSummary();
+
+        // If item exists on server, send update
+        if (item.id) {
+            try {
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                const res = await fetch(`/estimate/item/${item.id}`, {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': token || ''
+                    },
+                    body: JSON.stringify({
+                        quantity: newQty,
+                        rate: newRate,
+                        amount: newAmount,
+                        property_type: newPropType,
+                        property_selection: newPropSel
+                    })
+                });
+
+                if (!res.ok) {
+                    const text = await res.text();
+                    console.error('Failed to update item', res.status, text);
+                    alert('Failed to update item on server. See console.');
+                } else {
+                    const json = await parseJsonResponse(res);
+                    // reload authoritative items
+                    if (currentEstimateId) await loadEstimateItems(currentEstimateId);
+                }
+            } catch (err) {
+                console.error('Error updating item', err);
+            }
+        }
+
+        // Close modal
+        const m = document.getElementById('editItemModal'); if (m) m.remove();
+    };
 }
 
 // Delete item
-function deleteItem(group, index) {
+async function deleteItem(group, index) {
     if (!confirm('Are you sure you want to delete this item?')) return;
 
     // Find the item in the estimateItems array and remove the correct one
@@ -806,8 +994,39 @@ function deleteItem(group, index) {
     })();
 
     if (flatIndex >= 0) {
-        estimateItems.splice(flatIndex, 1);
+        const removedItem = estimateItems.splice(flatIndex, 1)[0];
         removed = true;
+        // If the item exists on server, delete it there as well
+        if (removedItem && removedItem.id) {
+            try {
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                const res = await fetch(`/estimate/item/${removedItem.id}`, {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': token || ''
+                    }
+                });
+                if (res.ok) {
+                        const json = await parseJsonResponse(res);
+                        if (json && json.totals) {
+                            const t = json.totals;
+                            if (document.getElementById('summaryTotal')) document.getElementById('summaryTotal').textContent = Number(t.total).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                            if (document.getElementById('summaryGst')) document.getElementById('summaryGst').textContent = Number(t.gst).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                            if (document.getElementById('summaryGrandTotal')) document.getElementById('summaryGrandTotal').textContent = Number(t.grand_total).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                            if (document.getElementById('summaryDiscount')) document.getElementById('summaryDiscount').textContent = Number(t.discount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                            if (document.getElementById('summaryFinalAmount')) document.getElementById('summaryFinalAmount').textContent = Number(t.final_amount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                        } else {
+                            if (currentEstimateId) await loadEstimateItems(currentEstimateId);
+                        }
+                } else {
+                    console.error('Failed to delete item on server', res.status);
+                }
+            } catch (err) {
+                console.error('Error deleting item on server', err);
+            }
+        }
     }
 
     if (removed) {
@@ -1102,11 +1321,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         try {
             const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            // include estimate_id when we are finalizing an existing draft
+            if (currentEstimateId) payload.estimate_id = currentEstimateId;
+
             const res = await fetch('/estimate/store', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': token || ''
                 },
                 body: JSON.stringify(payload)
@@ -1120,7 +1343,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(`Save failed: ${res.status}`);
             }
 
-            const data = await res.json();
+            const data = await parseJsonResponse(res);
             alert(`Estimate saved successfully. BID: ${data.bid}`);
 
             // Show last saved BID in the page

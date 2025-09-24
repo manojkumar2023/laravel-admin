@@ -32,8 +32,11 @@ class EstimateController extends Controller
             'items' => 'required|array'
         ]);
 
+        // If estimate_id is provided, finalize/update that estimate instead of creating a new one
+        $estimateId = $request->input('estimate_id');
+
         // Generate primary serial and BID atomically using transaction and estimate_serials row
-        $result = DB::transaction(function () use ($data) {
+        $result = DB::transaction(function () use ($data, $estimateId) {
             $serialRow = EstimateSerial::lockForUpdate()->first();
             if (!$serialRow) {
                 $serialRow = EstimateSerial::create(['next_serial' => 2]);
@@ -46,21 +49,31 @@ class EstimateController extends Controller
 
             $datePart = now()->format('Ymd');
             $bid = sprintf('BID-%s-%d', $datePart, $primary);
+            if ($estimateId) {
+                $estimate = Estimate::findOrFail($estimateId);
+                // Keep the existing bid/primary_serial
+                $bid = $estimate->bid;
+            } else {
+                $estimate = Estimate::create([
+                    'bid' => $bid,
+                    'bi_executive' => $data['bi_executive'] ?? null,
+                    'client_name' => $data['client_name'] ?? null,
+                    // property_type/property_selection are stored per-item
+                    'estimate_date' => $data['estimate_date'] ?? null,
+                    'expiry_date' => $data['expiry_date'] ?? null,
+                    'total' => $data['total'] ?? 0,
+                    'gst' => $data['gst'] ?? 0,
+                    'grand_total' => $data['grand_total'] ?? 0,
+                    'discount' => $data['discount'] ?? 0,
+                    'final_amount' => $data['final_amount'] ?? 0,
+                    'primary_serial' => $primary
+                ]);
+            }
 
-            $estimate = Estimate::create([
-                'bid' => $bid,
-                'bi_executive' => $data['bi_executive'] ?? null,
-                'client_name' => $data['client_name'] ?? null,
-                // property_type/property_selection are stored per-item
-                'estimate_date' => $data['estimate_date'] ?? null,
-                'expiry_date' => $data['expiry_date'] ?? null,
-                'total' => $data['total'] ?? 0,
-                'gst' => $data['gst'] ?? 0,
-                'grand_total' => $data['grand_total'] ?? 0,
-                'discount' => $data['discount'] ?? 0,
-                'final_amount' => $data['final_amount'] ?? 0,
-                'primary_serial' => $primary
-            ]);
+            // If finalizing an existing estimate, remove any previous items to avoid duplicates
+            if ($estimateId) {
+                EstimateItem::where('estimate_id', $estimate->id)->delete();
+            }
 
             foreach ($data['items'] as $it) {
                 EstimateItem::create([
@@ -185,13 +198,13 @@ class EstimateController extends Controller
             'grand_total' => $grandTotal,
             'discount' => $discount,
             'final_amount' => $finalAmount,
-            'property_selection' => $data['property_selection'] ?? $estimate->property_selection,
             'estimate_date' => $data['estimate_date'] ?? $estimate->estimate_date,
             'expiry_date' => $data['expiry_date'] ?? $estimate->expiry_date,
         ]);
 
         return response()->json([
             'item_id' => $item->id,
+            'item' => $item,
             'totals' => [
                 'total' => $total,
                 'gst' => $gst,
@@ -200,6 +213,104 @@ class EstimateController extends Controller
                 'final_amount' => $finalAmount,
             ],
             'bid' => $estimate->bid
+        ]);
+    }
+
+    // Update a single item
+    public function updateItem(Request $request, $id)
+    {
+        $data = $request->validate([
+            'area' => 'nullable|string',
+            'element' => 'nullable|string',
+            'material' => 'nullable|string',
+            'finish' => 'nullable|string',
+            'dimensions' => 'nullable|string',
+            'unit' => 'nullable|string',
+            'quantity' => 'nullable|numeric',
+            'rate' => 'nullable',
+            'amount' => 'nullable',
+            'floor' => 'nullable|string',
+            'property_type' => 'nullable|string',
+            'property_selection' => 'nullable|string'
+        ]);
+
+        $item = EstimateItem::findOrFail($id);
+        $item->update([
+            'area' => $data['area'] ?? $item->area,
+            'element' => $data['element'] ?? $item->element,
+            'material' => $data['material'] ?? $item->material,
+            'finish' => $data['finish'] ?? $item->finish,
+            'dimensions' => $data['dimensions'] ?? $item->dimensions,
+            'unit' => $data['unit'] ?? $item->unit,
+            'quantity' => $data['quantity'] ?? $item->quantity,
+            'rate' => isset($data['rate']) ? floatval(str_replace(',', '', $data['rate'])) : $item->rate,
+            'amount' => isset($data['amount']) ? floatval(str_replace(',', '', $data['amount'])) : $item->amount,
+            'floor' => $data['floor'] ?? $item->floor,
+            'property_type' => $data['property_type'] ?? $item->property_type,
+            'property_selection' => $data['property_selection'] ?? $item->property_selection,
+        ]);
+
+        // Recalculate parent estimate totals
+        $estimate = $item->estimate;
+        $total = EstimateItem::where('estimate_id', $estimate->id)->sum('amount');
+        $gst = round($total * 0.18, 2);
+        $grandTotal = round($total + $gst, 2);
+        $discountPercent = $estimate->discount ? ($estimate->discount / max($grandTotal, 1) * 100) : 15.0;
+        $discount = round($grandTotal * ($discountPercent / 100.0), 2);
+        $finalAmount = round($grandTotal - $discount, 2);
+
+        $estimate->update([
+            'total' => $total,
+            'gst' => $gst,
+            'grand_total' => $grandTotal,
+            'discount' => $discount,
+            'final_amount' => $finalAmount
+        ]);
+
+        return response()->json([
+            'item' => $item,
+            'totals' => [
+                'total' => $total,
+                'gst' => $gst,
+                'grand_total' => $grandTotal,
+                'discount' => $discount,
+                'final_amount' => $finalAmount
+            ]
+        ]);
+    }
+
+    // Delete a single item
+    public function deleteItem($id)
+    {
+        $item = EstimateItem::findOrFail($id);
+        $estimate = $item->estimate;
+        $item->delete();
+
+        // Recalculate totals
+        $total = EstimateItem::where('estimate_id', $estimate->id)->sum('amount');
+        $gst = round($total * 0.18, 2);
+        $grandTotal = round($total + $gst, 2);
+        $discountPercent = $estimate->discount ? ($estimate->discount / max($grandTotal, 1) * 100) : 15.0;
+        $discount = round($grandTotal * ($discountPercent / 100.0), 2);
+        $finalAmount = round($grandTotal - $discount, 2);
+
+        $estimate->update([
+            'total' => $total,
+            'gst' => $gst,
+            'grand_total' => $grandTotal,
+            'discount' => $discount,
+            'final_amount' => $finalAmount
+        ]);
+
+        return response()->json([
+            'deleted' => true,
+            'totals' => [
+                'total' => $total,
+                'gst' => $gst,
+                'grand_total' => $grandTotal,
+                'discount' => $discount,
+                'final_amount' => $finalAmount
+            ]
         ]);
     }
 

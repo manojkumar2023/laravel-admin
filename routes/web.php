@@ -31,6 +31,9 @@ Route::middleware(['auth', \App\Http\Middleware\PreventBackHistory::class])->gro
     Route::post('/estimate/{id}/item', [App\Http\Controllers\EstimateController::class, 'addItem'])->name('estimate.addItem');
     // Return estimate header and items as JSON
     Route::get('/estimate/{id}/items', [App\Http\Controllers\EstimateController::class, 'items'])->name('estimate.items');
+    // Update or delete a specific estimate item
+    Route::put('/estimate/item/{id}', [App\Http\Controllers\EstimateController::class, 'updateItem'])->name('estimate.updateItem');
+    Route::delete('/estimate/item/{id}', [App\Http\Controllers\EstimateController::class, 'deleteItem'])->name('estimate.deleteItem');
 });
 
 
