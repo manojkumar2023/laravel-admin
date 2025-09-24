@@ -124,6 +124,7 @@
                             <th>S. No.</th>
                             <th>Area</th>
                             <th>Amount (₹)</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="summaryTableBody">

@@ -396,6 +396,7 @@ let currentArea = null;
 let estimateItems = [];
 let groupedItems = {};
 let currentEstimateId = null; // holds the server-side estimate id when a draft has been created
+let currentEditIndex = null; // when editing, the flat index in estimateItems
 
 // Update elements based on selected area
 function updateElements() {
@@ -503,15 +504,17 @@ function selectElement(element) {
     // Scroll to element details
     if (details) details.scrollIntoView({ behavior: 'smooth' });
 
-    // Reset form
-    const ms = document.getElementById('materialSelect'); if (ms) ms.selectedIndex = 0;
-    const fs = document.getElementById('finishSelect'); if (fs) fs.innerHTML = '<option value="">-- Select Finish --</option>';
-    const us = document.getElementById('unitSelect'); if (us) us.selectedIndex = 0;
-    const q = document.getElementById('quantity'); if (q) q.value = 1;
-    const w = document.getElementById('width'); if (w) w.value = '';
-    const h = document.getElementById('height'); if (h) h.value = '';
-    const r = document.getElementById('rate'); if (r) r.value = '';
-    const a = document.getElementById('amount'); if (a) a.value = '';
+    // If we are NOT editing an existing item, reset the element detail form to defaults
+    if (currentEditIndex === null) {
+        const ms = document.getElementById('materialSelect'); if (ms) ms.selectedIndex = 0;
+        const fs = document.getElementById('finishSelect'); if (fs) fs.innerHTML = '<option value="">-- Select Finish --</option>';
+        const us = document.getElementById('unitSelect'); if (us) us.selectedIndex = 0;
+        const q = document.getElementById('quantity'); if (q) q.value = 1;
+        const w = document.getElementById('width'); if (w) w.value = '';
+        const h = document.getElementById('height'); if (h) h.value = '';
+        const r = document.getElementById('rate'); if (r) r.value = '';
+        const a = document.getElementById('amount'); if (a) a.value = '';
+    }
 }
 
 // Calculate rate based on material and finish
@@ -620,7 +623,7 @@ async function addToEstimate() {
     itemPayload.property_type = document.getElementById('propertyType')?.value || '';
     itemPayload.property_selection = collectPropertySelection();
 
-    // Persist to server: create draft if needed, then add item
+    // Persist to server: create draft if needed
     try {
         const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
@@ -667,6 +670,85 @@ async function addToEstimate() {
             try { await loadEstimateItems(currentEstimateId); } catch(e) { console.warn('Could not load items after draft creation', e); }
         }
 
+        // If we're editing an existing item, perform update instead of create
+        if (currentEditIndex !== null && currentEditIndex >= 0) {
+            const existing = estimateItems[currentEditIndex];
+            // update local values
+            existing.area = itemPayload.area;
+            existing.element = itemPayload.element;
+            existing.material = itemPayload.material;
+            existing.finish = itemPayload.finish;
+            existing.dimensions = itemPayload.dimensions;
+            existing.unit = itemPayload.unit;
+            existing.quantity = itemPayload.quantity;
+            existing.rate = itemPayload.rate;
+            existing.amount = itemPayload.amount;
+            existing.amountValue = parseFloat((itemPayload.amount || '').toString().replace(/,/g, '')) || 0;
+            existing.floor = itemPayload.floor;
+            existing.property_type = itemPayload.property_type;
+            existing.property_selection = itemPayload.property_selection;
+
+            // If item has server id, call PUT endpoint
+            if (existing.id) {
+                try {
+                    const resUpd = await fetch(`/estimate/item/${existing.id}`, {
+                        method: 'PUT',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': token || ''
+                        },
+                        body: JSON.stringify({
+                            area: existing.area,
+                            element: existing.element,
+                            material: existing.material,
+                            finish: existing.finish,
+                            dimensions: existing.dimensions,
+                            unit: existing.unit,
+                            quantity: existing.quantity,
+                            rate: existing.rate,
+                            amount: existing.amount,
+                            floor: existing.floor,
+                            property_type: existing.property_type,
+                            property_selection: existing.property_selection
+                        })
+                    });
+
+                    if (!resUpd.ok) {
+                        const text = await resUpd.text();
+                        console.error('Update failed', resUpd.status, text);
+                        alert('Failed to update item on server. See console.');
+                    } else {
+                        const json = await parseJsonResponse(resUpd);
+                        // If server returned totals, update summary
+                        if (json && json.totals) {
+                            const t = json.totals;
+                            if (document.getElementById('summaryTotal')) document.getElementById('summaryTotal').textContent = Number(t.total).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                            if (document.getElementById('summaryGst')) document.getElementById('summaryGst').textContent = Number(t.gst).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                            if (document.getElementById('summaryGrandTotal')) document.getElementById('summaryGrandTotal').textContent = Number(t.grand_total).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                            if (document.getElementById('summaryDiscount')) document.getElementById('summaryDiscount').textContent = Number(t.discount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                            if (document.getElementById('summaryFinalAmount')) document.getElementById('summaryFinalAmount').textContent = Number(t.final_amount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+                        } else if (currentEstimateId) {
+                            await loadEstimateItems(currentEstimateId);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error updating item', err);
+                }
+            } else {
+                // no server id: just update locally
+                renderEstimateTable();
+                updateSummary();
+            }
+
+            // Clear edit state
+            currentEditIndex = null;
+            const addBtn = document.getElementById('addToEstimate'); if (addBtn) addBtn.textContent = 'Add to Estimate';
+            cancelElement();
+            return;
+        }
+
         // now add the item (attach discountPercent so server calculates discount if provided)
         const resItem = await fetch(`/estimate/${currentEstimateId}/item`, {
             method: 'POST',
@@ -696,35 +778,11 @@ async function addToEstimate() {
 
     const itemJson = await parseJsonResponse(resItem);
 
-        // Append the authoritative returned item to local array
-        if (itemJson.item) {
-            const it = itemJson.item;
-            estimateItems.push({
-                id: it.id,
-                property_type: it.property_type || '',
-                property_selection: it.property_selection || '',
-                area: it.area,
-                element: it.element,
-                material: it.material,
-                finish: it.finish,
-                dimensions: it.dimensions,
-                unit: it.unit,
-                quantity: it.quantity,
-                rate: it.rate,
-                amount: it.amount,
-                amountValue: parseFloat(it.amount) || 0,
-                floor: it.floor
-            });
-        } else {
-            estimateItems.push({
-                id: itemJson.item_id || null,
-                ...itemPayload,
-                amountValue: parseFloat((itemPayload.amount || '').toString().replace(/,/g, '')) || 0
-            });
-        }
-
-        // Render the estimate table
-        renderEstimateTable();
+    // Render the estimate table (local) then reload authoritative data from server so detailed table shows saved list
+    renderEstimateTable();
+    if (currentEstimateId) {
+        try { await loadEstimateItems(currentEstimateId); } catch (e) { console.warn('Could not reload items after add', e); }
+    }
 
         // If server returned totals, apply them to UI (use locale formatting)
         if (itemJson.totals) {
@@ -764,6 +822,7 @@ function renderEstimateTable() {
     });
 
     // Render table with area headers
+    let serial = 1;
     Object.keys(groupedItems).forEach(group => {
         const headerRow = document.createElement('tr');
         headerRow.className = 'area-header';
@@ -777,6 +836,7 @@ function renderEstimateTable() {
             const row = document.createElement('tr');
             if (item.id) row.setAttribute('data-id', item.id);
             row.innerHTML = `
+                <td>${serial}</td>
                 <td>${item.area}</td>
                 <td>${item.element}</td>
                 <td>${item.material}</td>
@@ -791,6 +851,8 @@ function renderEstimateTable() {
                     <button class="btn-delete">Delete</button>
                 </td>
             `;
+
+            serial++;
 
             const editButton = row.querySelector('.btn-edit');
             const deleteButton = row.querySelector('.btn-delete');
@@ -809,27 +871,40 @@ function updateSummary() {
     if (!summaryTableBody) return;
     summaryTableBody.innerHTML = '';
 
-    // Group items by area and calculate totals
-    const areaTotals = {};
+    // Build grouping so we can render serial numbers for each item
+    const grouping = {};
     estimateItems.forEach(item => {
-        if (!areaTotals[item.area]) areaTotals[item.area] = 0;
-        areaTotals[item.area] += item.amountValue;
+        const groupKey = item.floor ? `${item.floor} - ${item.area}` : item.area;
+        if (!grouping[groupKey]) grouping[groupKey] = [];
+        grouping[groupKey].push(item);
     });
 
-    // Add rows for each area
+    // Add rows for each item with S.No., Area and Amount, and Actions
     let rowCount = 1;
     let total = 0;
+    Object.keys(grouping).forEach(groupKey => {
+        const itemsInGroup = grouping[groupKey];
+        itemsInGroup.forEach((item, idx) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${rowCount}</td>
+                <td>${groupKey} - ${item.element}</td>
+                <td>${(item.amountValue || parseFloat((item.amount||0))) .toLocaleString('en-IN')}</td>
+                <td>
+                    <button class="summary-edit">Edit</button>
+                    <button class="summary-delete">Delete</button>
+                </td>
+            `;
+            // Bind buttons to edit/delete using groupKey and index within group
+            const editBtn = row.querySelector('.summary-edit');
+            const delBtn = row.querySelector('.summary-delete');
+            if (editBtn) editBtn.addEventListener('click', () => editItem(groupKey, idx));
+            if (delBtn) delBtn.addEventListener('click', () => deleteItem(groupKey, idx));
 
-    Object.keys(areaTotals).forEach(area => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${rowCount}</td>
-            <td>${area}</td>
-            <td>${areaTotals[area].toLocaleString('en-IN')}</td>
-        `;
-        summaryTableBody.appendChild(row);
-        total += areaTotals[area];
-        rowCount++;
+            summaryTableBody.appendChild(row);
+            total += parseFloat(item.amountValue || item.amount || 0);
+            rowCount++;
+        });
     });
 
     // Calculate GST, discount, and final amount
@@ -869,108 +944,144 @@ function editItem(group, index) {
     if (flatIndex < 0) return;
     const item = estimateItems[flatIndex];
 
-    // Build modal if not present
-    let modal = document.getElementById('editItemModal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'editItemModal';
-        modal.style.position = 'fixed';
-        modal.style.left = '50%';
-        modal.style.top = '50%';
-        modal.style.transform = 'translate(-50%, -50%)';
-        modal.style.background = '#fff';
-        modal.style.padding = '16px';
-        modal.style.zIndex = 9999;
-        modal.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
-        modal.innerHTML = `
-            <h3>Edit Item</h3>
-            <div>
-                <label>Quantity: <input id="edit_qty" type="number" step="any"></label>
-            </div>
-            <div>
-                <label>Rate: <input id="edit_rate" type="text"></label>
-            </div>
-            <div>
-                <label>Amount: <input id="edit_amount" type="text"></label>
-            </div>
-            <div>
-                <label>Property Type: <select id="edit_property_type"><option value="">--</option><option value="apartment">Apartment</option><option value="villa">Villa</option><option value="office">Office</option></select></label>
-            </div>
-            <div>
-                <label>Property Selection: <input id="edit_property_selection" type="text"></label>
-            </div>
-            <div style="margin-top:8px">
-                <button id="edit_save">Save</button>
-                <button id="edit_cancel">Cancel</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        document.getElementById('edit_cancel').addEventListener('click', () => { modal.remove(); });
+    // Populate the add/edit form inline
+    currentEditIndex = flatIndex;
+    currentElement = item.element;
+    const details = document.getElementById('elementDetails');
+    if (details) details.style.display = 'block';
+
+    // set property type and selection early so area options are populated correctly
+    const propType = document.getElementById('propertyType');
+    if (propType) {
+        propType.value = item.property_type || '';
+        // Trigger change so UI sections (propertyOptions / floorOptions) update
+        propType.dispatchEvent(new Event('change'));
+
+        // floors or apartment selection - run after the change handler has made options visible
+        if ((item.property_type || '') === 'villa') {
+            // set villa floor checkboxes
+            document.querySelectorAll('.floor-checkbox input[type="checkbox"]').forEach(cb => {
+                cb.checked = (item.property_selection || '').split(',').map(s => s.trim()).includes(cb.value);
+            });
+        } else if ((item.property_type || '') === 'apartment') {
+            // set apartment radio
+            const sel = document.querySelectorAll('input[name="property"]');
+            sel.forEach(r => { r.checked = (r.value === (item.property_selection || '')); });
+        }
     }
 
-    // Populate values
-    document.getElementById('edit_qty').value = item.quantity || 0;
-    document.getElementById('edit_rate').value = item.rate || '';
-    document.getElementById('edit_amount').value = item.amount || '';
-    document.getElementById('edit_property_type').value = item.property_type || '';
-    document.getElementById('edit_property_selection').value = item.property_selection || '';
+    // Set area select (reverse lookup by display name) - robust matching
+    const areaSelect = document.getElementById('areaSelect');
+    if (areaSelect) {
+        const normalize = s => (s || '').toString().replace(/\s+/g, ' ').trim().toLowerCase();
+        let areaText = normalize(item.area);
+        // If area contains a dash (e.g., "Ground - Living Room"), use the right-most part
+        if (areaText.indexOf('-') !== -1) {
+            const parts = areaText.split('-').map(p => p.trim()).filter(Boolean);
+            if (parts.length) areaText = parts[parts.length - 1];
+        }
 
-    // Hook save
-    document.getElementById('edit_save').onclick = async function() {
-        const newQty = parseFloat(document.getElementById('edit_qty').value) || 0;
-        const newRate = document.getElementById('edit_rate').value || '0';
-        const newAmount = document.getElementById('edit_amount').value || '0';
-        const newPropType = document.getElementById('edit_property_type').value || '';
-        const newPropSel = document.getElementById('edit_property_selection').value || '';
+        let foundKey = '';
+        for (const k in areaDisplayNames) {
+            if (normalize(areaDisplayNames[k]) === areaText) { foundKey = k; break; }
+        }
 
-        // Update locally immediately for responsiveness
-        item.quantity = newQty;
-        item.rate = newRate;
-        item.amount = newAmount;
-        item.amountValue = parseFloat((newAmount || '').toString().replace(/,/g, '')) || 0;
-        item.property_type = newPropType;
-        item.property_selection = newPropSel;
-        renderEstimateTable();
-        updateSummary();
-
-        // If item exists on server, send update
-        if (item.id) {
-            try {
-                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                const res = await fetch(`/estimate/item/${item.id}`, {
-                    method: 'PUT',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': token || ''
-                    },
-                    body: JSON.stringify({
-                        quantity: newQty,
-                        rate: newRate,
-                        amount: newAmount,
-                        property_type: newPropType,
-                        property_selection: newPropSel
-                    })
-                });
-
-                if (!res.ok) {
-                    const text = await res.text();
-                    console.error('Failed to update item', res.status, text);
-                    alert('Failed to update item on server. See console.');
-                } else {
-                    const json = await parseJsonResponse(res);
-                    // reload authoritative items
-                    if (currentEstimateId) await loadEstimateItems(currentEstimateId);
+        if (!foundKey) {
+            // try matching option text/value (case-insensitive)
+            for (const opt of areaSelect.options) {
+                const optText = normalize(opt.text);
+                const optVal = normalize(opt.value);
+                if (optText === areaText || optVal === areaText || optText.indexOf(areaText) !== -1 || areaText.indexOf(optText) !== -1) {
+                    foundKey = opt.value; break;
                 }
-            } catch (err) {
-                console.error('Error updating item', err);
             }
         }
 
-        // Close modal
-        const m = document.getElementById('editItemModal'); if (m) m.remove();
-    };
+        if (!foundKey) {
+            // fallback: try matching all words in areaText against option text (handles extra punctuation/newlines)
+            const words = areaText.split(' ').filter(Boolean);
+            for (const opt of areaSelect.options) {
+                const optText = normalize(opt.text);
+                const allWords = words.every(w => optText.indexOf(w) !== -1);
+                if (allWords) { foundKey = opt.value; break; }
+            }
+        }
+
+        if (foundKey) {
+            areaSelect.value = foundKey;
+            // dispatch change so any listeners react (and updateElements is also invoked)
+            areaSelect.dispatchEvent(new Event('change'));
+        } else {
+            console.warn('editItem: could not match area for', item.area);
+        }
+        // ensure elements are updated for the selected area
+        updateElements();
+        // select the element to populate element-specific controls (materials/finishes)
+        if (item.element) {
+            // wait a tick to ensure elementContainer children are present
+            setTimeout(() => {
+                const elementContainer = document.getElementById('elementContainer');
+                if (elementContainer) {
+                    const children = Array.from(elementContainer.querySelectorAll('.element-item'));
+                    const match = children.find(ch => normalize(ch.textContent) === normalize(item.element));
+                    if (match) {
+                        // visually mark and trigger the click handler to fully select
+                        match.classList.add('selected');
+                        match.click();
+                    } else {
+                        // fallback: directly call selectElement
+                        selectElement(item.element);
+                    }
+                } else {
+                    selectElement(item.element);
+                }
+            }, 0);
+        }
+    }
+
+    // Set material and finishes
+    const materialSelect = document.getElementById('materialSelect');
+    const finishSelect = document.getElementById('finishSelect');
+    if (materialSelect) {
+        // try to match by text
+        for (let i = 0; i < materialSelect.options.length; i++) {
+            if (materialSelect.options[i].text === item.material) { materialSelect.selectedIndex = i; break; }
+        }
+        updateFinishes();
+    }
+    if (finishSelect) {
+        for (let i = 0; i < finishSelect.options.length; i++) {
+            if (finishSelect.options[i].text === item.finish) { finishSelect.selectedIndex = i; break; }
+        }
+    }
+
+    // unit
+    const unitSelect = document.getElementById('unitSelect');
+    if (unitSelect) {
+        for (let i = 0; i < unitSelect.options.length; i++) {
+            if (unitSelect.options[i].text === item.unit || unitSelect.options[i].value === item.unit) { unitSelect.selectedIndex = i; break; }
+        }
+    }
+
+    // dimensions -> width/height if in 'X ft x Y ft' pattern
+    const dims = (item.dimensions || '').match(/(\d+(?:\.\d+)?)\s*ft\s*x\s*(\d+(?:\.\d+)?)/i);
+    if (dims) {
+        const w = document.getElementById('width'); if (w) w.value = dims[1];
+        const h = document.getElementById('height'); if (h) h.value = dims[2];
+    } else {
+        const w = document.getElementById('width'); if (w) w.value = '';
+        const h = document.getElementById('height'); if (h) h.value = '';
+    }
+
+    // quantity/rate/amount
+    const q = document.getElementById('quantity'); if (q) q.value = item.quantity || 0;
+    const r = document.getElementById('rate'); if (r) r.value = item.rate || '';
+    const a = document.getElementById('amount'); if (a) a.value = item.amount || '';
+
+
+    // Change add button label to Update
+    const addBtn = document.getElementById('addToEstimate');
+    if (addBtn) addBtn.textContent = 'Update Item';
 }
 
 // Delete item
@@ -1009,17 +1120,9 @@ async function deleteItem(group, index) {
                     }
                 });
                 if (res.ok) {
-                        const json = await parseJsonResponse(res);
-                        if (json && json.totals) {
-                            const t = json.totals;
-                            if (document.getElementById('summaryTotal')) document.getElementById('summaryTotal').textContent = Number(t.total).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-                            if (document.getElementById('summaryGst')) document.getElementById('summaryGst').textContent = Number(t.gst).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-                            if (document.getElementById('summaryGrandTotal')) document.getElementById('summaryGrandTotal').textContent = Number(t.grand_total).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-                            if (document.getElementById('summaryDiscount')) document.getElementById('summaryDiscount').textContent = Number(t.discount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-                            if (document.getElementById('summaryFinalAmount')) document.getElementById('summaryFinalAmount').textContent = Number(t.final_amount).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-                        } else {
-                            if (currentEstimateId) await loadEstimateItems(currentEstimateId);
-                        }
+                    const json = await parseJsonResponse(res);
+                    // reload authoritative items after delete so detailed table reflects server
+                    if (currentEstimateId) await loadEstimateItems(currentEstimateId);
                 } else {
                     console.error('Failed to delete item on server', res.status);
                 }
