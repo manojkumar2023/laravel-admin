@@ -827,7 +827,7 @@ function renderEstimateTable() {
         const headerRow = document.createElement('tr');
         headerRow.className = 'area-header';
         const headerCell = document.createElement('td');
-        headerCell.colSpan = 10;
+        headerCell.colSpan = 12;
         headerCell.textContent = group;
         headerRow.appendChild(headerCell);
         tableBody.appendChild(headerRow);
