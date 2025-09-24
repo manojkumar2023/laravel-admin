@@ -34,6 +34,8 @@ Route::middleware(['auth', \App\Http\Middleware\PreventBackHistory::class])->gro
     // Update or delete a specific estimate item
     Route::put('/estimate/item/{id}', [App\Http\Controllers\EstimateController::class, 'updateItem'])->name('estimate.updateItem');
     Route::delete('/estimate/item/{id}', [App\Http\Controllers\EstimateController::class, 'deleteItem'])->name('estimate.deleteItem');
+        // Upload generated PDF (used by client to upload and share via WhatsApp)
+        Route::post('/estimate/upload-pdf', [App\Http\Controllers\EstimateController::class, 'uploadPdf'])->name('estimate.uploadPdf');
 });
 
 

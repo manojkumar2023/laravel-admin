@@ -326,4 +326,24 @@ class EstimateController extends Controller
             'items' => $estimate->items
         ]);
     }
+
+    // Accept a PDF upload from the client and return a public URL for sharing
+    public function uploadPdf(Request $request)
+    {
+        $request->validate([
+            'pdf' => 'required|file|mimes:pdf|max:10240' // max 10MB
+        ]);
+
+        $file = $request->file('pdf');
+        $timestamp = now()->format('YmdHis');
+        $filename = sprintf('estimate_%s_%s.pdf', $timestamp, uniqid());
+
+        // Store in storage/app/public/estimates
+        $path = $file->storeAs('public/estimates', $filename);
+
+        // Return public URL (assumes `php artisan storage:link` has been run)
+        $publicPath = asset(str_replace('public/', 'storage/', $path));
+
+        return response()->json(['url' => $publicPath]);
+    }
 }

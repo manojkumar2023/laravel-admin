@@ -1155,11 +1155,143 @@ function cancelElement() {
 
 // Share on WhatsApp
 function shareWhatsapp() {
+    // Generate PDF, upload it to server, and open WhatsApp with the file URL
     const clientName = document.getElementById('clientName')?.value || 'Client';
     const phoneNumber = '919902571049'; // Company phone number
-    const message = `Estimate for ${clientName} from Bhavana Interiors & Decorators`;
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+
+    // Helper: generate PDF as Blob using existing export flow but returning a blob instead of saving
+    const exportPdfBlob = async () => {
+        updatePdfValues();
+        updatePdfSummary();
+        updatePdfEstimateTable();
+
+        const pdfContainer = document.getElementById('pdfExportContainer');
+        if (!pdfContainer) throw new Error('PDF container not found');
+
+        // Prepare container same as exportPdf but capture canvas and return a blob
+        const pdfPage = pdfContainer.querySelector('.pdf-page');
+        let spacerEl = null;
+        if (pdfPage) {
+            spacerEl = document.createElement('div');
+            spacerEl.className = 'pdf-bottom-spacer';
+            spacerEl.style.height = '60mm';
+            spacerEl.style.width = '100%';
+            spacerEl.style.display = 'block';
+            pdfPage.appendChild(spacerEl);
+        }
+
+        const originalDisplay = pdfContainer.style.display;
+        const originalPosition = pdfContainer.style.position;
+        const originalLeft = pdfContainer.style.left;
+        const originalTop = pdfContainer.style.top;
+        const originalWidth = pdfContainer.style.width;
+
+        try {
+            pdfContainer.style.display = 'block';
+            pdfContainer.style.position = 'absolute';
+            pdfContainer.style.left = '-9999px';
+            pdfContainer.style.top = '0';
+            pdfContainer.style.width = '794px';
+
+            const footerEl = pdfContainer.querySelector('.pdf-footer');
+            const originalFooterDisplay = footerEl ? footerEl.style.display : null;
+            if (footerEl) footerEl.style.display = 'none';
+
+            // allow paint
+            await new Promise(resolve => setTimeout(resolve, 150));
+
+            const canvas = await html2canvas(pdfContainer, { scale: 2, useCORS: true, logging: false, width: pdfContainer.scrollWidth, height: pdfContainer.scrollHeight });
+
+            // restore DOM
+            if (footerEl) footerEl.style.display = originalFooterDisplay;
+            if (spacerEl && spacerEl.parentNode) spacerEl.parentNode.removeChild(spacerEl);
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const imgData = canvas.toDataURL('image/jpeg', 1.0);
+            const imgWidth = doc.internal.pageSize.getWidth();
+            let imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+            heightLeft -= doc.internal.pageSize.getHeight();
+
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                doc.addPage();
+                doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                heightLeft -= doc.internal.pageSize.getHeight();
+            }
+
+            // Draw fallback header fields on page 1 (ensures they are present)
+            doc.setPage(1);
+            doc.setFontSize(10);
+            doc.setTextColor(20,20,20);
+            const biText = (document.getElementById('pdf-biExecutive')?.textContent || '').toString().trim();
+            const clientText = (document.getElementById('pdf-clientName')?.textContent || '').toString().trim();
+            const estText = (document.getElementById('pdf-estimateDate')?.textContent || '').toString().trim();
+            const expText = (document.getElementById('pdf-expiryDate')?.textContent || '').toString().trim();
+            const leftX = 24; let y = 62; const gap = 7; const leftLabelX = leftX; const leftValueX = leftX + 50;
+            if (biText) { doc.text('BI Executive:', leftLabelX, y); doc.text(biText, leftValueX, y); }
+            y += gap;
+            if (clientText) { doc.text('Client Name:', leftLabelX, y); doc.text(clientText, leftValueX, y); }
+            y += gap;
+            if (estText) { doc.text('Estimate Date:', leftLabelX, y); doc.text(estText, leftValueX, y); }
+            y += gap;
+            if (expText) { doc.text('Estimate Expiry Date:', leftLabelX, y); doc.text(expText, leftValueX, y); }
+
+            // Return blob
+            const pdfBlob = doc.output('blob');
+
+            // restore styles
+            pdfContainer.style.display = originalDisplay;
+            pdfContainer.style.position = originalPosition;
+            pdfContainer.style.left = originalLeft;
+            pdfContainer.style.top = originalTop;
+            pdfContainer.style.width = originalWidth;
+
+            return pdfBlob;
+        } catch (err) {
+            // restore styles on error
+            pdfContainer.style.display = originalDisplay;
+            pdfContainer.style.position = originalPosition;
+            pdfContainer.style.left = originalLeft;
+            pdfContainer.style.top = originalTop;
+            pdfContainer.style.width = originalWidth;
+            if (spacerEl && spacerEl.parentNode) spacerEl.parentNode.removeChild(spacerEl);
+            throw err;
+        }
+    };
+
+    // Run export, upload and share
+    (async () => {
+        try {
+            const blob = await exportPdfBlob();
+            const form = new FormData();
+            form.append('pdf', blob, `estimate_${Date.now()}.pdf`);
+
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+            const res = await fetch('/estimate/upload-pdf', {
+                method: 'POST',
+                headers: token ? { 'X-CSRF-TOKEN': token } : {},
+                body: form
+            });
+
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Upload failed');
+
+            const fileUrl = json.url;
+            const message = `Estimate for ${clientName}: ${fileUrl}`;
+            const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, '_blank');
+        } catch (err) {
+            console.error('Failed to share PDF via WhatsApp', err);
+            alert('Failed to upload and share PDF. See console for details.');
+        }
+    })();
 }
 
 // Export as PDF - optimized version
