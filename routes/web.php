@@ -61,4 +61,12 @@ Route::middleware(['auth:admin', \App\Http\Middleware\PreventBackHistory::class]
     Route::get('/admin/clients/{id}/edit', [App\Http\Controllers\Admin\ClientController::class, 'edit'])->name('admin.clients.edit');
     Route::put('/admin/clients/{id}', [App\Http\Controllers\Admin\ClientController::class, 'update'])->name('admin.clients.update');
     Route::delete('/admin/clients/{id}', [App\Http\Controllers\Admin\ClientController::class, 'destroy'])->name('admin.clients.destroy');
+    //Master Settings Routes
+    // Property Type Routes
+    Route::get('/admin/property-types', [App\Http\Controllers\Admin\PropertyTypeController::class, 'index'])->name('admin.property-types.index');
+    Route::get('/admin/property-types/create', [App\Http\Controllers\Admin\PropertyTypeController::class, 'create'])->name('admin.property-types.create');
+    Route::post('/admin/property-types/store', [App\Http\Controllers\Admin\PropertyTypeController::class, 'store'])->name('admin.property-types.store');
+    Route::get('/admin/property-types/{id}/edit', [App\Http\Controllers\Admin\PropertyTypeController::class, 'edit'])->name('admin.property-types.edit');
+    Route::put('/admin/property-types/{id}', [App\Http\Controllers\Admin\PropertyTypeController::class, 'update'])->name('admin.property-types.update');
+    Route::delete('/admin/property-types/{id}', [App\Http\Controllers\Admin\PropertyTypeController::class, 'destroy'])->name('admin.property-types.destroy');
 });
