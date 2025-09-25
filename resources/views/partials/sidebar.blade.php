@@ -3,7 +3,7 @@
     <div class="page-sidebar navbar-collapse collapse">
         <!-- BEGIN SIDEBAR MENU -->
         <ul class="page-sidebar-menu   " data-keep-expanded="false" data-auto-scroll="true" data-slide-speed="200">
-            <li class="nav-item start ">
+            <li class="nav-item ">
                 <a href="javascript:;" class="nav-link nav-toggle">
                     <i class="icon-home"></i>
                     <span class="title">Dashboard</span>
@@ -26,11 +26,24 @@
                     </li>
                 </ul> -->
             </li>
-            <li class="nav-item  ">
-                <a href="{{ route('estimate.index') }}" class="nav-link nav-toggle">
+            <li class="nav-item start">
+                <a href="javascript:;" class="nav-link nav-toggle">
                     <i class="icon-diamond"></i>
                     <span class="title">Estimate</span>
+                    <span class="arrow"></span>
                 </a>
+                <ul class="sub-menu">
+                    <li class="nav-item  ">
+                        <a href="{{ route('estimate.list') }}" class="nav-link ">
+                            <span class="title">Estimate List</span>
+                        </a>
+                    </li>
+                    <li class="nav-item  ">
+                        <a href="{{ route('estimate.index') }}" class="nav-link ">
+                            <span class="title">Estimate Generate</span>
+                        </a>
+                    </li>
+                </ul>
             </li>
         </ul>
         <!-- END SIDEBAR MENU -->

@@ -21,6 +21,8 @@ Route::middleware(['auth', \App\Http\Middleware\PreventBackHistory::class])->gro
     Route::put('/clients/{id}', [App\Http\Controllers\ClientController::class, 'update'])->name('clients.update');
     Route::delete('/clients/{id}', [App\Http\Controllers\ClientController::class, 'destroy'])->name('clients.destroy');
     Route::get('/estimate', [App\Http\Controllers\EstimateController::class, 'index'])->name('estimate.index');
+    // Show a specific estimate in the estimator UI
+    Route::get('/estimate/{id}', [App\Http\Controllers\EstimateController::class, 'show'])->name('estimate.show');
     // API to get next persistent estimate serial
     Route::get('/estimate/serial/next', [App\Http\Controllers\EstimateSerialController::class, 'next'])->name('estimate.serial.next');
     // Store full estimate (persist estimate and items)
@@ -34,8 +36,9 @@ Route::middleware(['auth', \App\Http\Middleware\PreventBackHistory::class])->gro
     // Update or delete a specific estimate item
     Route::put('/estimate/item/{id}', [App\Http\Controllers\EstimateController::class, 'updateItem'])->name('estimate.updateItem');
     Route::delete('/estimate/item/{id}', [App\Http\Controllers\EstimateController::class, 'deleteItem'])->name('estimate.deleteItem');
-        // Upload generated PDF (used by client to upload and share via WhatsApp)
-        Route::post('/estimate/upload-pdf', [App\Http\Controllers\EstimateController::class, 'uploadPdf'])->name('estimate.uploadPdf');
+    // Upload generated PDF (used by client to upload and share via WhatsApp)
+    Route::post('/estimate/upload-pdf', [App\Http\Controllers\EstimateController::class, 'uploadPdf'])->name('estimate.uploadPdf');
+    Route::get('/estimate-list', [App\Http\Controllers\EstimateController::class, 'estimateList'])->name('estimate.list');
 });
 
 

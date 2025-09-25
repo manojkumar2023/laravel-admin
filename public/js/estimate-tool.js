@@ -56,58 +56,317 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Set up property selection event
-    document.querySelectorAll('input[name="property"]').forEach(radio => {
-        radio.addEventListener('change', updatePdfValues);
-    });
+    // If the server provided an initialEstimateId (via estimate.show), load its items/header
+    (async () => {
+        try {
+            let initialId = null;
+            // prefer explicit window.initialEstimateId, fallback to data attribute on #estimateApp
+            if (typeof window.initialEstimateId !== 'undefined' && window.initialEstimateId) {
+                initialId = parseInt(window.initialEstimateId, 10);
+            } else {
+                const appEl = document.getElementById('estimateApp');
+                if (appEl && appEl.dataset && appEl.dataset.initialEstimateId) {
+                    const v = appEl.dataset.initialEstimateId.trim();
+                    if (v) initialId = parseInt(v, 10);
+                }
+            }
 
-    // Set up floor selection event
-    document.querySelectorAll('.floor-checkbox input[type="checkbox"]').forEach(checkbox => {
-        checkbox.addEventListener('change', updatePdfValues);
-    });
+            if (!initialId || isNaN(initialId)) return;
+            const id = initialId;
 
-    // Set up area selection event
-    const areaSelectEl = document.getElementById('areaSelect');
-    if (areaSelectEl) areaSelectEl.addEventListener('change', updateElements);
+            // load items and header once
+            let json = null;
+            try {
+                const res = await fetch(`/estimate/${id}/items`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                if (!res.ok) {
+                    console.warn('Failed to fetch initial estimate items', res.status);
+                } else {
+                    json = await res.json();
+                }
+            } catch (err) {
+                console.warn('Could not pre-load estimate', err);
+            }
 
-    // Set up material selection event to update finishes
-    const materialSelectEl = document.getElementById('materialSelect');
-    if (materialSelectEl) materialSelectEl.addEventListener('change', updateFinishes);
+            if (json && json.estimate) {
+                const est = json.estimate;
+                // populate header fields
+                if (document.getElementById('biExecutive')) document.getElementById('biExecutive').value = est.bi_executive || '';
+                if (document.getElementById('clientName')) document.getElementById('clientName').value = est.client_name || '';
+                // Dates may include time - ensure YYYY-MM-DD (input type=date expects this)
+                if (document.getElementById('estimateDate')) {
+                    const ed = est.estimate_date ? est.estimate_date.toString().slice(0,10) : '';
+                    document.getElementById('estimateDate').value = ed;
+                }
+                if (document.getElementById('expiryDate')) {
+                    const exd = est.expiry_date ? est.expiry_date.toString().slice(0,10) : '';
+                    document.getElementById('expiryDate').value = exd;
+                }
 
-    // Set up calculate event
-    ['width','height','quantity'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', calculateAmount);
-    });
-    if (document.getElementById('materialSelect')) document.getElementById('materialSelect').addEventListener('change', calculateRate);
-    if (document.getElementById('finishSelect')) document.getElementById('finishSelect').addEventListener('change', calculateRate);
-    if (document.getElementById('unitSelect')) document.getElementById('unitSelect').addEventListener('change', calculateAmount);
+                // Set propertyType from header if present, otherwise infer from first item
+                const propEl = document.getElementById('propertyType');
+                let chosenProp = (est.property_type || '');
+                // try to find property_type on any item if header doesn't have it
+                if (!chosenProp && json.items && json.items.length) {
+                    // prefer first item's property_type, else scan for any non-empty property_type
+                    chosenProp = json.items[0].property_type || '';
+                    if (!chosenProp) {
+                        for (const it of json.items) {
+                            if (it.property_type && it.property_type.toString().trim()) { chosenProp = it.property_type; break; }
+                        }
+                    }
+                }
+                // heuristic: if still not set, infer from item.floor or property_selection
+                if (!chosenProp && json.items && json.items.length) {
+                    // if any item has a floor value, assume villa
+                    if (json.items.some(it => it.floor && it.floor.toString().trim())) {
+                        chosenProp = 'villa';
+                    } else if (json.items.some(it => it.property_selection && /bhk/i.test(it.property_selection.toString()))) {
+                        // property_selection like '2BHK' indicates apartment
+                        chosenProp = 'apartment';
+                    }
+                }
+                const norm = s => (s||'').toString().trim().toLowerCase();
+                if (propEl && chosenProp) {
+                    console.debug('Loader: stored property_type=', chosenProp);
+                    let matched = false;
+                    let matchedValue = null;
+                    for (let i=0;i<propEl.options.length;i++) {
+                        const opt = propEl.options[i];
+                        if (norm(opt.value) === norm(chosenProp) || norm(opt.text) === norm(chosenProp)) { propEl.selectedIndex = i; matched = true; matchedValue = opt.value; break; }
+                    }
+                    if (!matched) {
+                        for (let i=0;i<propEl.options.length;i++) {
+                            const opt = propEl.options[i];
+                            if (norm(opt.value).indexOf(norm(chosenProp)) !== -1 || norm(opt.text).indexOf(norm(chosenProp)) !== -1) { propEl.selectedIndex = i; matched = true; matchedValue = opt.value; break; }
+                        }
+                    }
+                    // heuristic fallback mapping for common variants
+                    if (!matched) {
+                        const heur = norm(chosenProp);
+                        const map = {
+                            'apartment': 'apartment',
+                            'flat': 'apartment',
+                            'residential': 'apartment',
+                            'villa': 'villa',
+                            'house': 'villa',
+                            'office': 'office',
+                            'commercial': 'commercial',
+                            'spa': 'spa_salon',
+                            'salon': 'spa_salon',
+                            'cafe': 'cafe_restaurant',
+                            'restaurant': 'cafe_restaurant'
+                        };
+                        for (const key in map) {
+                            if (heur.indexOf(key) !== -1) {
+                                const want = map[key];
+                                // try to set option with value want
+                                for (let i=0;i<propEl.options.length;i++) {
+                                    if (propEl.options[i].value === want) { propEl.selectedIndex = i; matched = true; matchedValue = want; break; }
+                                }
+                                if (matched) break;
+                            }
+                        }
+                    }
+                    if (matched) {
+                        console.debug('Loader: matched propertyType ->', matchedValue);
+                        propEl.dispatchEvent(new Event('change'));
+                    } else {
+                        console.debug('Loader: could not match propertyType for', chosenProp);
+                    }
+                }
 
-    // Set up add to estimate event
-    const addBtn = document.getElementById('addToEstimate');
-    if (addBtn) addBtn.addEventListener('click', addToEstimate);
+                // Set property selection (apartment radio or villa floor checkboxes) from estimate header or first item
+                let propSelection = est.property_selection || (json.items && json.items.length ? json.items[0].property_selection : '');
+                // propSelection might be ['1BHK'] (stringified JSON), an array, or comma-separated string
+                try {
+                    if (typeof propSelection === 'string' && propSelection.trim().startsWith('[')) {
+                        propSelection = JSON.parse(propSelection);
+                    }
+                } catch (e) { /* ignore */ }
 
-    // Set up cancel event
-    const cancelBtn = document.getElementById('cancelElement');
-    if (cancelBtn) cancelBtn.addEventListener('click', cancelElement);
+                const asArray = val => {
+                    if (val === null || typeof val === 'undefined' || val === '') return [];
+                    if (Array.isArray(val)) return val.map(x => (x||'').toString().trim()).filter(Boolean);
+                    if (typeof val === 'string') return val.split(',').map(s => s.trim()).filter(Boolean);
+                    return [val.toString().trim()];
+                };
 
-    // Set up export events
-    const exportPdfBtn = document.getElementById('exportPdf');
-    if (exportPdfBtn) exportPdfBtn.addEventListener('click', exportPdf);
-    const exportExcelBtn = document.getElementById('exportExcel');
-    if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportExcel);
-    const shareWhatsappBtn = document.getElementById('shareWhatsapp');
-    if (shareWhatsappBtn) shareWhatsappBtn.addEventListener('click', shareWhatsapp);
+                if (propSelection) {
+                    const valsRaw = asArray(propSelection).map(v => v.toString().trim());
+                    const vals = valsRaw.map(v => v.toLowerCase());
 
-    // Set up input events to update PDF values
-    ['biExecutive','clientName','propertyType','estimateDate'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener(id==='propertyType' ? 'change':'input', updatePdfValues);
-    });
+                    // If chosenProp is apartment/villa, try the normal path
+                    if (chosenProp === 'apartment') {
+                        const radios = Array.from(document.querySelectorAll('input[name="property"]'));
+                        console.debug('Loader: matching apartment radios, valsRaw=', valsRaw, 'vals=', vals);
+                        radios.forEach(r => {
+                            const rv = (r.value||'').toString().trim().toLowerCase();
+                            const rid = (r.id||'').toString().trim().toLowerCase();
+                            const labelEl = document.querySelector(`label[for="${r.id}"]`);
+                            const labelText = labelEl ? (labelEl.textContent||'').toString().trim().toLowerCase() : '';
+                            console.debug('Loader: radio', r.id, 'value=', rv, 'label=', labelText);
+                            if (vals.includes(rv) || vals.includes(rid) || vals.includes(labelText)) {
+                                try { r.checked = true; r.click(); } catch(e) { try { r.dispatchEvent(new Event('change')); } catch(_){} }
+                                console.debug('Loader: checked radio', r.id);
+                            }
+                        });
+                    } else if (chosenProp === 'villa') {
+                        const checkboxes = Array.from(document.querySelectorAll('.floor-checkbox input[type="checkbox"]'));
+                        console.debug('Loader: matching villa checkboxes, valsRaw=', valsRaw, 'vals=', vals);
+                        checkboxes.forEach(cb => {
+                            const cv = (cb.value||'').toString().trim().toLowerCase();
+                            const cid = (cb.id||'').toString().trim().toLowerCase();
+                            if (vals.includes(cv) || vals.includes(cid)) {
+                                try { cb.checked = true; cb.click(); } catch(e) { try { cb.dispatchEvent(new Event('change')); } catch(_){} }
+                                console.debug('Loader: checked floor checkbox', cb.id);
+                            }
+                        });
+                    }
 
-    // Initialize PDF values
-    updatePdfValues();
+                    // Fallback: if values contain a BHK token (e.g., '4bhk') try to match apartment radios even if chosenProp wasn't set
+                    const hasBhk = vals.some(v => /\d+\s*bhk|bhk/i.test(v));
+                    if (hasBhk) {
+                        const radios = Array.from(document.querySelectorAll('input[name="property"]'));
+                        radios.forEach(r => {
+                            const rv = (r.value||'').toString().trim().toLowerCase();
+                            const rid = (r.id||'').toString().trim().toLowerCase();
+                            // also check associated label text
+                            let lab = '';
+                            try {
+                                const labEl = document.querySelector(`label[for="${r.id}"]`);
+                                if (labEl) lab = labEl.textContent.toString().trim().toLowerCase();
+                            } catch(e) {}
+                            console.debug('Loader fallback: radio', r.id, 'rv=', rv, 'label=', lab);
+                            if (vals.includes(rv) || vals.includes(rid) || vals.some(v => lab.indexOf(v) !== -1)) {
+                                try { r.checked = true; r.click(); } catch(e) { try { r.dispatchEvent(new Event('change')); } catch(_){} }
+                                // ensure propertyType becomes apartment if not already
+                                if (propEl && propEl.value !== 'apartment') { propEl.value = 'apartment'; propEl.dispatchEvent(new Event('change')); }
+                                console.debug('Loader fallback: checked radio', r.id);
+                            }
+                        });
+                    }
+                }
+
+                updatePdfValues();
+            }
+
+            // set currentEstimateId so subsequent actions persist to this estimate
+            currentEstimateId = id;
+            try { await loadEstimateItems(id); } catch (e) { console.warn('Could not load items after initial load', e); }
+
+            // After items are loaded, attempt to select area in areaSelect to the first item's area
+            try {
+                const firstItem = (estimateItems && estimateItems.length) ? estimateItems[0] : null;
+                if (firstItem) {
+                    // area in DB may be display name - find corresponding key in areaDisplayNames
+                    const target = (firstItem.area || '').toString().trim();
+                    const areaSelect = document.getElementById('areaSelect');
+                    if (areaSelect) {
+                        const normalize = s => (s||'').toString().replace(/\s+/g,' ').trim().toLowerCase();
+                        let found = null;
+                        for (const opt of areaSelect.options) {
+                            if (normalize(opt.value) === normalize(target) || normalize(opt.text) === normalize(target)) { found = opt.value; break; }
+                        }
+                        if (!found) {
+                            for (const k in areaDisplayNames) {
+                                if (normalize(areaDisplayNames[k]) === normalize(target) || normalize(k) === normalize(target)) { found = k; break; }
+                            }
+                        }
+                        if (found) {
+                            // set value and explicitly mark the option selected so UI plugins or browser render state updates
+                            areaSelect.value = found;
+                            // also set option.selected and selectedIndex for robustness
+                            for (let i=0;i<areaSelect.options.length;i++) {
+                                const opt = areaSelect.options[i];
+                                opt.selected = (opt.value === found);
+                                if (opt.selected) areaSelect.selectedIndex = i;
+                            }
+                            // trigger events and allow a short tick for UI to update
+                            setTimeout(() => {
+                                areaSelect.dispatchEvent(new Event('input'));
+                                areaSelect.dispatchEvent(new Event('change'));
+                                // Ensure elements are populated, then attempt to auto-select the element from the first item
+                                try {
+                                    updateElements();
+                                    setTimeout(() => {
+                                        try {
+                                            const firstItem = (estimateItems && estimateItems.length) ? estimateItems[0] : null;
+                                            if (firstItem && firstItem.element) {
+                                                const normalize = s => (s||'').toString().replace(/\s+/g,' ').trim().toLowerCase();
+                                                const elementContainer = document.getElementById('elementContainer');
+                                                if (elementContainer) {
+                                                    const children = Array.from(elementContainer.querySelectorAll('.element-item'));
+                                                    const match = children.find(ch => normalize(ch.textContent) === normalize(firstItem.element));
+                                                    if (match) {
+                                                        try { match.classList.add('selected'); match.click(); } catch(e) { try { match.dispatchEvent(new Event('click')); } catch(_){} }
+                                                    } else {
+                                                        const partial = children.find(ch => normalize(ch.textContent).indexOf(normalize(firstItem.element)) !== -1);
+                                                        if (partial) { try { partial.click(); } catch(e) { try { partial.dispatchEvent(new Event('click')); } catch(_){} } }
+                                                    }
+
+                                                    // After ensuring element tile is clicked, call editItem to populate all detail fields from the saved item
+                                                    try {
+                                                        const groupKey = firstItem.floor ? `${firstItem.floor} - ${firstItem.area}` : firstItem.area;
+                                                        // compute index within that group
+                                                        let idx = -1;
+                                                        let count = 0;
+                                                        for (let i = 0; i < estimateItems.length; i++) {
+                                                            const it = estimateItems[i];
+                                                            const itGroup = it.floor ? `${it.floor} - ${it.area}` : it.area;
+                                                            if (itGroup === groupKey) {
+                                                                if (it.id === firstItem.id) { idx = count; break; }
+                                                                count++;
+                                                            }
+                                                        }
+                                                        if (idx >= 0) {
+                                                            // call editItem to populate the element details
+                                                            try { editItem(groupKey, idx); } catch(e) { console.warn('Could not call editItem', e); }
+                                                        }
+                                                    } catch(e) { console.warn('Could not auto-edit item after clicking element', e); }
+                                                }
+                                            }
+                                        } catch(e) { console.warn('Could not auto-select element for area', e); }
+                                    }, 60);
+                                } catch(e) { console.warn('Error populating elements after area select', e); }
+                            }, 30);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not auto-select area after loading items', err);
+            }
+
+        } catch (err) {
+            console.warn('Error checking initialEstimateId', err);
+        }
+    })();
 });
+
+// Wire up live recalculation: when quantity/width/height/unit/rate change, recalc amount immediately
+(function() {
+    function el(id) { return document.getElementById(id); }
+    // run after DOM ready (if DOM already ready, these will return elements)
+    const tryAttach = () => {
+        const quantity = el('quantity');
+        const width = el('width');
+        const height = el('height');
+        const unit = el('unitSelect');
+        const rate = el('rate');
+
+        if (quantity) quantity.addEventListener('input', () => { calculateAmount(); });
+        if (width) width.addEventListener('input', () => { calculateAmount(); });
+        if (height) height.addEventListener('input', () => { calculateAmount(); });
+        if (unit) unit.addEventListener('change', () => { calculateAmount(); });
+        if (rate) rate.addEventListener('input', () => { calculateAmount(); });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tryAttach);
+    } else {
+        // DOM already ready
+        tryAttach();
+    }
+})();
 
 // Update area options based on property type
 function updateAreaOptions(propertyType) {
@@ -422,7 +681,15 @@ function updateElements() {
             const elementDiv = document.createElement('div');
             elementDiv.className = 'element-item';
             elementDiv.textContent = element;
-            elementDiv.addEventListener('click', () => selectElement(element));
+            elementDiv.addEventListener('click', function(evt) {
+                try {
+                    // clear selected on siblings
+                    const siblings = Array.from(elementContainer.querySelectorAll('.element-item'));
+                    siblings.forEach(s => s.classList.remove('selected'));
+                    this.classList.add('selected');
+                } catch (e) { console.warn('Error toggling selected class', e); }
+                selectElement(element);
+            });
             elementContainer.appendChild(elementDiv);
         });
     }
@@ -719,7 +986,10 @@ async function addToEstimate() {
                             amount: existing.amount,
                             floor: existing.floor,
                             property_type: existing.property_type,
-                            property_selection: existing.property_selection
+                            property_selection: existing.property_selection,
+                            expiry_date: document.getElementById('expiryDate')?.value || null,
+                            bi_executive: document.getElementById('biExecutive')?.value || '',
+                            client_name: document.getElementById('clientName')?.value || ''
                         })
                     });
 
@@ -740,6 +1010,8 @@ async function addToEstimate() {
                         } else if (currentEstimateId) {
                             await loadEstimateItems(currentEstimateId);
                         }
+                        // Notify user that update succeeded
+                        try { alert('Item updated successfully'); } catch(e) { console.debug('Could not show update alert', e); }
                     }
                 } catch (err) {
                     console.error('Error updating item', err);
@@ -750,10 +1022,9 @@ async function addToEstimate() {
                 updateSummary();
             }
 
-            // Clear edit state
-            currentEditIndex = null;
-            const addBtn = document.getElementById('addToEstimate'); if (addBtn) addBtn.textContent = 'Add to Estimate';
-            cancelElement();
+            // Keep edit state and keep the Element Details visible so the user can continue editing if desired.
+            // Do not clear currentEditIndex or call cancelElement() here.
+            // Return to avoid running the add-new-item flow below.
             return;
         }
 
@@ -1269,8 +1540,28 @@ function shareWhatsapp() {
     (async () => {
         try {
             const blob = await exportPdfBlob();
+            // Prefer using the estimate BID as filename (if we have an active draft)
+            let filenameBase = `estimate_${Date.now()}`;
+            try {
+                if (typeof currentEstimateId !== 'undefined' && currentEstimateId) {
+                    const resInfo = await fetch(`/estimate/${currentEstimateId}/items`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                    if (resInfo.ok) {
+                        const jsonInfo = await resInfo.json();
+                        if (jsonInfo && jsonInfo.estimate && jsonInfo.estimate.bid) {
+                            const bid = jsonInfo.estimate.bid.toString();
+                            const clientShort = (document.getElementById('clientName')?.value || '').toString();
+                            filenameBase = `${bid}_${clientShort}`;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not fetch estimate BID for filename, falling back to timestamp', err);
+            }
+
+            // sanitize filename base (allow letters, numbers, dash, underscore and dot)
+            filenameBase = filenameBase.replace(/[^a-zA-Z0-9_\-\.]/g, '_').replace(/__+/g, '_');
             const form = new FormData();
-            form.append('pdf', blob, `estimate_${Date.now()}.pdf`);
+            form.append('pdf', blob, `${filenameBase}.pdf`);
 
             const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
@@ -1828,6 +2119,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         try {
             const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            console.debug && console.debug('Saving estimate payload', payload);
             // include estimate_id when we are finalizing an existing draft
             if (currentEstimateId) payload.estimate_id = currentEstimateId;
 
@@ -1851,7 +2143,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const data = await parseJsonResponse(res);
-            alert(`Estimate saved successfully. BID: ${data.bid}`);
+            console.debug && console.debug('Save response', data);
+            // Update header inputs from server authoritative data if provided
+            if (data && data.estimate) {
+                try {
+                    const est = data.estimate;
+                    const be = document.getElementById('biExecutive'); if (be) be.value = est.bi_executive || '';
+                    const ce = document.getElementById('clientName'); if (ce) ce.value = est.client_name || '';
+                    const ede = document.getElementById('estimateDate'); if (ede) ede.value = est.estimate_date ? est.estimate_date.toString().slice(0,10) : '';
+                    const exde = document.getElementById('expiryDate'); if (exde) exde.value = est.expiry_date ? est.expiry_date.toString().slice(0,10) : '';
+                    updatePdfValues();
+                } catch (e) { console.warn('Could not apply server header values', e); }
+            }
+
+            alert(`Estimate saved successfully. BID: ${data.bid}\nClient: ${document.getElementById('clientName')?.value || ''}`);
 
             // Show last saved BID in the page
             const lastSavedEl = document.getElementById('lastSavedBid');
@@ -1877,5 +2182,55 @@ document.addEventListener('DOMContentLoaded', function() {
             saveBtn.textContent = 'Save Estimate';
         }
     });
+
+    // Attach Add/Update and Cancel button handlers so the UI triggers the addToEstimate/cancel flow
+    const addBtn = document.getElementById('addToEstimate');
+    if (addBtn) {
+        addBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            try { addToEstimate(); } catch (err) { console.error('Error in addToEstimate handler', err); }
+        });
+    }
+
+    const cancelBtn = document.getElementById('cancelElement');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            try {
+                cancelElement();
+                currentEditIndex = null;
+                const ab = document.getElementById('addToEstimate'); if (ab) ab.textContent = 'Add to Estimate';
+            } catch (err) { console.error('Error in cancel handler', err); }
+        });
+    }
+
+    // Ensure area change updates the element grid when user selects an area
+    const areaSelect = document.getElementById('areaSelect');
+    if (areaSelect) {
+        const runUpdate = function(evt) {
+            try {
+                console.debug && console.debug('areaSelect event', evt.type, 'value=', areaSelect.value);
+                updateElements();
+            } catch (e) { console.error('Error updating elements on area change', e); }
+        };
+        areaSelect.addEventListener('change', runUpdate);
+        // some browsers or UI patterns emit input or click; listen to them as well
+        areaSelect.addEventListener('input', runUpdate);
+        areaSelect.addEventListener('click', runUpdate);
+    }
+    // Ensure header inputs update PDF placeholders and internal state when edited
+    try {
+        const biEl = document.getElementById('biExecutive');
+        const clientEl = document.getElementById('clientName');
+        const estDateEl = document.getElementById('estimateDate');
+        const expDateEl = document.getElementById('expiryDate');
+        const onHeaderChange = () => {
+            try { updatePdfValues(); } catch(e) { console.debug('updatePdfValues failed', e); }
+        };
+        if (biEl) biEl.addEventListener('input', onHeaderChange);
+        if (clientEl) clientEl.addEventListener('input', onHeaderChange);
+        if (estDateEl) estDateEl.addEventListener('change', onHeaderChange);
+        if (expDateEl) expDateEl.addEventListener('change', onHeaderChange);
+    } catch (e) { console.warn('Could not attach header listeners', e); }
 });
 

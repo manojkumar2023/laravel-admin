@@ -52,8 +52,20 @@ class EstimateController extends Controller
             $bid = sprintf('BID-%s-%d', $datePart, $primary);
             if ($estimateId) {
                 $estimate = Estimate::findOrFail($estimateId);
-                // Keep the existing bid/primary_serial
+                // Keep the existing bid/primary_serial but update header fields if provided
                 $bid = $estimate->bid;
+                $estimate->update([
+                    'bi_executive' => $data['bi_executive'] ?? $estimate->bi_executive,
+                    'client_name' => $data['client_name'] ?? $estimate->client_name,
+                    'estimate_date' => $data['estimate_date'] ?? $estimate->estimate_date,
+                    'expiry_date' => $data['expiry_date'] ?? $estimate->expiry_date,
+                    // allow totals to be updated from client if provided
+                    'total' => $data['total'] ?? $estimate->total,
+                    'gst' => $data['gst'] ?? $estimate->gst,
+                    'grand_total' => $data['grand_total'] ?? $estimate->grand_total,
+                    'discount' => $data['discount'] ?? $estimate->discount,
+                    'final_amount' => $data['final_amount'] ?? $estimate->final_amount,
+                ]);
             } else {
                 $estimate = Estimate::create([
                     'bid' => $bid,
@@ -113,7 +125,9 @@ class EstimateController extends Controller
             'expiry_date' => 'nullable|date'
         ]);
 
-        $result = DB::transaction(function () use ($data) {
+        $estimateId = $request->input('estimate_id');
+
+        $result = DB::transaction(function () use ($data, $estimateId) {
             $serialRow = EstimateSerial::lockForUpdate()->first();
             if (!$serialRow) {
                 $serialRow = EstimateSerial::create(['next_serial' => 2]);
@@ -127,16 +141,27 @@ class EstimateController extends Controller
             $datePart = now()->format('Ymd');
             $bid = sprintf('BID-%s-%d', $datePart, $primary);
 
-            $estimate = Estimate::create([
-                'bid' => $bid,
-                'bi_executive' => $data['bi_executive'] ?? null,
-                'client_name' => $data['client_name'] ?? null,
-                // property_type/property_selection are stored per-item
-                'estimate_date' => $data['estimate_date'] ?? null,
-                'expiry_date' => $data['expiry_date'] ?? null,
-                'primary_serial' => $primary,
-                'user_id' => Auth::id() ?? null
-            ]);
+            if ($estimateId) {
+                $estimate = Estimate::findOrFail($estimateId);
+                // update header fields when saving a draft for existing estimate
+                $estimate->update([
+                    'bi_executive' => $data['bi_executive'] ?? $estimate->bi_executive,
+                    'client_name' => $data['client_name'] ?? $estimate->client_name,
+                    'estimate_date' => $data['estimate_date'] ?? $estimate->estimate_date,
+                    'expiry_date' => $data['expiry_date'] ?? $estimate->expiry_date,
+                ]);
+            } else {
+                $estimate = Estimate::create([
+                    'bid' => $bid,
+                    'bi_executive' => $data['bi_executive'] ?? null,
+                    'client_name' => $data['client_name'] ?? null,
+                    // property_type/property_selection are stored per-item
+                    'estimate_date' => $data['estimate_date'] ?? null,
+                    'expiry_date' => $data['expiry_date'] ?? null,
+                    'primary_serial' => $primary,
+                    'user_id' => Auth::id() ?? null
+                ]);
+            }
 
             return ['bid' => $bid, 'estimate_id' => $estimate->id];
         });
@@ -162,6 +187,8 @@ class EstimateController extends Controller
             // optional header/summary fields to update estimate
             'property_type' => 'nullable|string',
             'property_selection' => 'nullable|string',
+            'bi_executive' => 'nullable|string',
+            'client_name' => 'nullable|string',
             'estimate_date' => 'nullable|date',
             'expiry_date' => 'nullable|date',
             'discount_percent' => 'nullable|numeric'
@@ -201,6 +228,8 @@ class EstimateController extends Controller
             'grand_total' => $grandTotal,
             'discount' => $discount,
             'final_amount' => $finalAmount,
+            'bi_executive' => $data['bi_executive'] ?? $estimate->bi_executive,
+            'client_name' => $data['client_name'] ?? $estimate->client_name,
             'estimate_date' => $data['estimate_date'] ?? $estimate->estimate_date,
             'expiry_date' => $data['expiry_date'] ?? $estimate->expiry_date,
         ]);
@@ -234,7 +263,12 @@ class EstimateController extends Controller
             'amount' => 'nullable',
             'floor' => 'nullable|string',
             'property_type' => 'nullable|string',
-            'property_selection' => 'nullable|string'
+            'property_selection' => 'nullable|string',
+            // allow updating header fields when updating an item
+            'bi_executive' => 'nullable|string',
+            'client_name' => 'nullable|string',
+            'estimate_date' => 'nullable|date',
+            'expiry_date' => 'nullable|date'
         ]);
 
         $item = EstimateItem::findOrFail($id);
@@ -268,6 +302,14 @@ class EstimateController extends Controller
             'grand_total' => $grandTotal,
             'discount' => $discount,
             'final_amount' => $finalAmount
+        ]);
+
+        // Also update header fields if present in the request (including expiry_date)
+        $estimate->update([
+            'bi_executive' => $data['bi_executive'] ?? $estimate->bi_executive,
+            'client_name' => $data['client_name'] ?? $estimate->client_name,
+            'estimate_date' => $data['estimate_date'] ?? $estimate->estimate_date,
+            'expiry_date' => $data['expiry_date'] ?? $estimate->expiry_date,
         ]);
 
         return response()->json([
@@ -327,6 +369,13 @@ class EstimateController extends Controller
         ]);
     }
 
+    // Show estimator UI preloaded with a specific estimate id
+    public function show($id)
+    {
+        // We render the same index view — client JS will load the estimate items when initialEstimateId is present
+        return view('pages.estimate.index', ['initialEstimateId' => $id]);
+    }
+
     // Accept a PDF upload from the client and return a public URL for sharing
     public function uploadPdf(Request $request)
     {
@@ -335,8 +384,27 @@ class EstimateController extends Controller
         ]);
 
         $file = $request->file('pdf');
-        $timestamp = now()->format('YmdHis');
-        $filename = sprintf('estimate_%s_%s.pdf', $timestamp, uniqid());
+
+        // Prefer client-provided filename (if any), otherwise fallback to timestamp+uniqid
+        $original = $file->getClientOriginalName() ?? '';
+        $originalBase = pathinfo($original, PATHINFO_FILENAME) ?: '';
+
+        $safeBase = $originalBase ? preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $originalBase) : '';
+        if (!$safeBase) {
+            $safeBase = 'estimate_' . now()->format('YmdHis') . '_' . uniqid();
+        }
+
+        // Ensure .pdf extension
+        $filename = $safeBase;
+        if (strtolower(pathinfo($filename, PATHINFO_EXTENSION)) !== 'pdf') {
+            $filename = $filename . '.pdf';
+        }
+
+        // If a file with same name exists, append uniqid to avoid overwrite
+        $storagePath = storage_path('app/public/estimates/' . $filename);
+        if (file_exists($storagePath)) {
+            $filename = pathinfo($filename, PATHINFO_FILENAME) . '_' . uniqid() . '.pdf';
+        }
 
         // Store in storage/app/public/estimates
         $path = $file->storeAs('public/estimates', $filename);
@@ -345,5 +413,11 @@ class EstimateController extends Controller
         $publicPath = asset(str_replace('public/', 'storage/', $path));
 
         return response()->json(['url' => $publicPath]);
+    }
+
+    public function estimateList()
+    {
+        $items = Estimate::where('user_id', Auth::id())->get();
+        return view('pages.estimate.list', compact('items'));
     }
 }
