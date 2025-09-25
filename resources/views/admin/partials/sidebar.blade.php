@@ -29,6 +29,11 @@
                             <span class="title">Property Options</span>
                         </a>
                     </li>
+                    <li class="nav-item  ">
+                        <a href="{{ route('admin.property-areas.index') }}" class="nav-link ">
+                            <span class="title">Property Areas</span>
+                        </a>
+                    </li>
                 </ul>
             </li>
             <li class="heading">
