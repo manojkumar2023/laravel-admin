@@ -69,4 +69,11 @@ Route::middleware(['auth:admin', \App\Http\Middleware\PreventBackHistory::class]
     Route::get('/admin/property-types/{id}/edit', [App\Http\Controllers\Admin\PropertyTypeController::class, 'edit'])->name('admin.property-types.edit');
     Route::put('/admin/property-types/{id}', [App\Http\Controllers\Admin\PropertyTypeController::class, 'update'])->name('admin.property-types.update');
     Route::delete('/admin/property-types/{id}', [App\Http\Controllers\Admin\PropertyTypeController::class, 'destroy'])->name('admin.property-types.destroy');
+    // Property option Routes
+    Route::get('/admin/property-options', [App\Http\Controllers\Admin\PropertyOptionController::class, 'index'])->name('admin.property-options.index');
+    Route::get('/admin/property-options/create', [App\Http\Controllers\Admin\PropertyOptionController::class, 'create'])->name('admin.property-options.create');
+    Route::post('/admin/property-options/store', [App\Http\Controllers\Admin\PropertyOptionController::class, 'store'])->name('admin.property-options.store');
+    Route::get('/admin/property-options/{id}/edit', [App\Http\Controllers\Admin\PropertyOptionController::class, 'edit'])->name('admin.property-options.edit');
+    Route::put('/admin/property-options/{id}', [App\Http\Controllers\Admin\PropertyOptionController::class, 'update'])->name('admin.property-options.update');
+    Route::delete('/admin/property-options/{id}', [App\Http\Controllers\Admin\PropertyOptionController::class, 'destroy'])->name('admin.property-options.destroy');
 });
