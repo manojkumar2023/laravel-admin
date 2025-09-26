@@ -34,6 +34,11 @@
                             <span class="title">Property Areas</span>
                         </a>
                     </li>
+                    <li class="nav-item  ">
+                        <a href="{{ route('admin.property-modules.index') }}" class="nav-link ">
+                            <span class="title">Property Modules</span>
+                        </a>
+                    </li>
                 </ul>
             </li>
             <li class="heading">

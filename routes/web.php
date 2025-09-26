@@ -83,4 +83,12 @@ Route::middleware(['auth:admin', \App\Http\Middleware\PreventBackHistory::class]
     Route::get('/admin/property-areas/{id}/edit', [App\Http\Controllers\Admin\PropertyAreaController::class, 'edit'])->name('admin.property-areas.edit');
     Route::put('/admin/property-areas/{id}', [App\Http\Controllers\Admin\PropertyAreaController::class, 'update'])->name('admin.property-areas.update');
     Route::delete('/admin/property-areas/{id}', [App\Http\Controllers\Admin\PropertyAreaController::class, 'destroy'])->name('admin.property-areas.destroy');
+    // Property module Routes
+    Route::get('/admin/property-modules', [App\Http\Controllers\Admin\PropertyModuleController::class, 'index'])->name('admin.property-modules.index');
+    Route::get('/admin/property-modules/create', [App\Http\Controllers\Admin\PropertyModuleController::class, 'create'])->name('admin.property-modules.create');
+    Route::get('/admin/property-areas/by-type/{typeId}', [App\Http\Controllers\Admin\PropertyModuleController::class, 'areasByType'])->name('admin.property-areas.byType');
+    Route::post('/admin/property-modules/store', [App\Http\Controllers\Admin\PropertyModuleController::class, 'store'])->name('admin.property-modules.store');
+    Route::get('/admin/property-modules/{id}/edit', [App\Http\Controllers\Admin\PropertyModuleController::class, 'edit'])->name('admin.property-modules.edit');
+    Route::put('/admin/property-modules/{id}', [App\Http\Controllers\Admin\PropertyModuleController::class, 'update'])->name('admin.property-modules.update');
+    Route::delete('/admin/property-modules/{id}', [App\Http\Controllers\Admin\PropertyModuleController::class, 'destroy'])->name('admin.property-modules.destroy');
 });
