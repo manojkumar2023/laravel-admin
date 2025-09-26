@@ -6,7 +6,7 @@
     <div class="page-head">
         <!-- BEGIN PAGE TITLE -->
         <div class="page-title">
-            <h1>Material</h1>
+            <h1>Finishes</h1>
         </div>
         <!-- END PAGE TITLE -->
     </div>
@@ -18,7 +18,7 @@
             <i class="fa fa-circle"></i>
         </li>
         <li>
-            <span class="active">Material List</span>
+            <span class="active">Finishes List</span>
         </li>
     </ul>
     <!-- END PAGE BREADCRUMB -->
@@ -30,7 +30,7 @@
                 <div class="portlet-title">
                     <div class="caption font-dark">
                         <i class="icon-settings font-dark"></i>
-                        <span class="caption-subject bold uppercase">Material List</span>
+                        <span class="caption-subject bold uppercase">Finishes List</span>
                     </div>
                     <div class="tools"> </div>
                 </div>
@@ -39,7 +39,7 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="btn-group">
-                                    <a href="{{ route('admin.materials.create') }}" class="btn sbold green"> Add New Material
+                                    <a href="{{ route('admin.finishes.create') }}" class="btn sbold green"> Add New Finishes
 
                                         <i class="fa fa-plus"></i>
                                     </a>
@@ -55,7 +55,7 @@
                                 <th>Property Area Name</th>
                                 <th>Property Module Name</th>
                                 <th>Material Name</th>
-                                <th>Slug</th>
+                                <th>Finish Name</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -67,16 +67,16 @@
                                 <td>{{$data->propertyType->property_type_name ?? ''}}</td>
                                 <td>{{$data->propertyArea->property_area_name ?? ''}}</td>
                                 <td>{{$data->propertyModule->property_module_name ?? ''}}</td>
-                                <td>{{$data->material_name ?? ''}}</td>
-                                <td>{{$data->slug}}</td>
+                                <td>{{$data->material->material_name ?? ''}}</td>
+                                <td>{{$data->finish_name ?? ''}}</td>
                                 <td>
                                     <span class="label label-sm label-success"> {{ $data->status == 707 ? 'Active' : 'Inactive' }} </span>
                                 </td>
                                 <td>
-                                        <a href="{{ route('admin.materials.edit', $data->id) }}" class="btn btn-outline btn-circle green btn-sm purple">
+                                        <a href="{{ route('admin.finishes.edit', $data->id) }}" class="btn btn-outline btn-circle green btn-sm purple">
                                         <i class="fa fa-edit"></i> Edit
                                     </a>
-                                        <a href="javascript:void(0)" class="btn btn-outline btn-circle dark btn-sm black delete-data open-delete-modal" data-action="{{ route('admin.materials.destroy', $data->id) }}" data-name="{{ $data->material_name ?? '' }}">
+                                        <a href="javascript:void(0)" class="btn btn-outline btn-circle dark btn-sm black delete-data open-delete-modal" data-action="{{ route('admin.finishes.destroy', $data->id) }}" data-name="{{ $data->finish_name ?? '' }}">
                                         <i class="fa fa-trash-o"></i> Delete
                                     </a>
                                 </td>

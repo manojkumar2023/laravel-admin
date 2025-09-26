@@ -44,6 +44,11 @@
                             <span class="title">Materials</span>
                         </a>
                     </li>
+                    <li class="nav-item  ">
+                        <a href="{{ route('admin.finishes.index') }}" class="nav-link ">
+                            <span class="title">Finishes</span>
+                        </a>
+                    </li>
                 </ul>
             </li>
             <li class="heading">

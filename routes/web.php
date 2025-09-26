@@ -99,4 +99,12 @@ Route::middleware(['auth:admin', \App\Http\Middleware\PreventBackHistory::class]
     Route::get('/admin/materials/{id}/edit', [App\Http\Controllers\Admin\MaterialController::class, 'edit'])->name('admin.materials.edit');
     Route::put('/admin/materials/{id}', [App\Http\Controllers\Admin\MaterialController::class, 'update'])->name('admin.materials.update');
     Route::delete('/admin/materials/{id}', [App\Http\Controllers\Admin\MaterialController::class, 'destroy'])->name('admin.materials.destroy');
+    // Finish Routes
+    Route::get('/admin/finishes', [App\Http\Controllers\Admin\FinishController::class, 'index'])->name('admin.finishes.index');
+    Route::get('/admin/finishes/create', [App\Http\Controllers\Admin\FinishController::class, 'create'])->name('admin.finishes.create');
+    Route::get('/admin/materials/by-module/{moduleId}', [App\Http\Controllers\Admin\FinishController::class, 'materialsByModule'])->name('admin.materials.byModule');
+    Route::post('/admin/finishes/store', [App\Http\Controllers\Admin\FinishController::class, 'store'])->name('admin.finishes.store');
+    Route::get('/admin/finishes/{id}/edit', [App\Http\Controllers\Admin\FinishController::class, 'edit'])->name('admin.finishes.edit');
+    Route::put('/admin/finishes/{id}', [App\Http\Controllers\Admin\FinishController::class, 'update'])->name('admin.finishes.update');
+    Route::delete('/admin/finishes/{id}', [App\Http\Controllers\Admin\FinishController::class, 'destroy'])->name('admin.finishes.destroy');
 });

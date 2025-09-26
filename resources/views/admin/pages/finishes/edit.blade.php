@@ -1,0 +1,351 @@
+@extends('layouts.app')
+
+@section('content')
+
+<div class="page-content">
+    <!-- BEGIN PAGE HEAD-->
+    <div class="page-head">
+        <!-- BEGIN PAGE TITLE -->
+        <div class="page-title">
+            <h1>Finishes Edit Data</h1>
+        </div>
+        <!-- END PAGE TITLE -->
+    </div>
+    <!-- END PAGE HEAD-->
+    <!-- BEGIN PAGE BREADCRUMB -->
+    <ul class="page-breadcrumb breadcrumb">
+        <li>
+            <a href="index.html">Home</a>
+            <i class="fa fa-circle"></i>
+        </li>
+        <li>
+            <span class="active">Finishes Edit Stuff</span>
+        </li>
+    </ul>
+    <!-- END PAGE BREADCRUMB -->
+    <div class="row">
+        <div class="col-md-12">
+            <!-- BEGIN VALIDATION STATES-->
+            <div class="portlet light portlet-fit portlet-form bordered">
+                <div class="portlet-title">
+                    <div class="caption">
+                        <i class="icon-settings font-red"></i>
+                        <span class="caption-subject font-red sbold uppercase">Edit Finishes</span>
+                    </div>
+                    <div class="actions">
+                        <div class="btn-group btn-group-devided" data-toggle="buttons">
+                            <!-- Back button -->
+                        </div>
+                    </div>
+                </div>
+                <div class="portlet-body">
+                    <!-- BEGIN FORM-->
+                    <form action="{{ route('admin.finishes.update', $item->id) }}" method="POST" id="form_sample_2" class="form-horizontal">
+                        @csrf
+                        @method('PUT')
+                        <div class="form-body">
+                            <div class="alert alert-danger display-hide">
+                                <button class="close" data-close="alert"></button> You have some form errors. Please check below.
+                            </div>
+                            <div class="alert alert-success display-hide">
+                                <button class="close" data-close="alert"></button> Your form validation is successful!
+                            </div>
+                            <div class="form-group @error('property_type_id') has-error @enderror">
+                                <label class="control-label col-md-3">Property Type
+                                    <span class="required"> * </span>
+                                </label>
+                                <div class="col-md-4">
+                                    <select id="property_type_id" name="property_type_id" class="form-control" required>
+                                        <option value="">Select Property Type</option>
+                                        @foreach($propertyTypes as $type)
+                                            <option value="{{ $type->id }}" {{ $item->property_type_id == $type->id ? 'selected' : '' }}>{{ $type->property_type_name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('property_type_id')
+                                        <span class="help-block"> {{ $message }} </span>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="form-group @error('property_area_id') has-error @enderror">
+                                <label class="control-label col-md-3">Property Area
+                                    <span class="required"> * </span>
+                                </label>
+                                <div class="col-md-4">
+                                    <select id="property_area_id" name="property_area_id" class="form-control" required data-current-area="{{ $item->property_area_id }}">
+                                        <option value="">Select Property Area</option>
+                                        @foreach($propertyAreas as $area)
+                                            <option value="{{ $area->id }}" {{ $item->property_area_id == $area->id ? 'selected' : '' }}>{{ $area->property_area_name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('property_area_id')
+                                        <span class="help-block"> {{ $message }} </span>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="form-group @error('property_module_id') has-error @enderror">
+                                <label class="control-label col-md-3">Property Module
+                                    <span class="required"> * </span>
+                                </label>
+                                <div class="col-md-4">
+                                    <select id="property_module_id" name="property_module_id" class="form-control" required data-current-module="{{ $item->property_module_id ?? '' }}">
+                                        <option value="">Select Property Module</option>
+                                    </select>
+                                    @error('property_module_id')
+                                        <span class="help-block"> {{ $message }} </span>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="form-group @error('material_id') has-error @enderror">
+                                <label class="control-label col-md-3">Material
+                                    <span class="required"> * </span>
+                                </label>
+                                <div class="col-md-4">
+                                    <select id="material_id" name="material_id" class="form-control" required data-current-material="{{ $item->material_id ?? '' }}">
+                                        <option value="">Select Material</option>
+                                    </select>
+                                    @error('material_id')
+                                        <span class="help-block"> {{ $message }} </span>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="form-group @error('finish_name') has-error @enderror">
+                                <label class="control-label col-md-3">Finish Name
+                                    <span class="required"> * </span>
+                                </label>
+                                <div class="col-md-4">
+                                    <input type="text" name="finish_name" value="{{ $item->finish_name ?? '' }}" class="form-control" required />
+                                    @error('finishes_name')
+                                        <span class="help-block"> {{ $message }} </span>
+                                    @enderror
+                                </div>
+                            </div>
+                            <div class="form-group @error('status') has-error @enderror">
+                                <label class="control-label col-md-3">Status
+                                    <span class="required"> * </span>
+                                </label>
+                                <div class="col-md-4">
+                                    <select name="status" class="form-control" required>
+                                        <option value="">Select...</option>
+                                        <option value="707" {{ $item->status==707 ? 'selected' : '' }}>Active</option>
+                                        <option value="505" {{ $item->status==505 ? 'selected' : '' }}>Inactive</option>
+                                    </select>
+                                    @error('status')
+                                        <span class="help-block"> {{ $message }} </span>
+                                    @enderror
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <div class="row">
+                                <div class="col-md-offset-3 col-md-9">
+                                    <button type="submit" class="btn green">Submit</button>
+                                    <button type="button" class="btn grey-salsa btn-outline">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    <!-- END FORM-->
+                </div>
+            </div>
+            <!-- END VALIDATION STATES-->
+        </div>
+    </div>
+</div>
+@endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const typeSelect = document.getElementById('property_type_id');
+    const areaSelect = document.getElementById('property_area_id');
+    const moduleSelect = document.getElementById('property_module_id');
+    const currentAreaId = areaSelect ? (areaSelect.dataset.currentArea || null) : null;
+    const currentModuleId = moduleSelect ? (moduleSelect.dataset.currentModule || null) : null;
+
+    if (!typeSelect || !areaSelect) return;
+
+    function loadAreas(typeId, setSelected) {
+        areaSelect.innerHTML = '<option value="">Select Property Area</option>';
+        if (!typeId) return;
+        const url = `{{ url('/admin/property-areas/by-type') }}/${typeId}`;
+        fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(resp => { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.json(); })
+            .then(data => {
+                data.forEach(area => {
+                    const opt = document.createElement('option');
+                    opt.value = area.id;
+                    opt.textContent = area.property_area_name;
+                    if (setSelected && String(area.id) === String(currentAreaId)) opt.selected = true;
+                    areaSelect.appendChild(opt);
+                });
+                // After populating areas, if a specific area should be selected, select and trigger change
+                setTimeout(() => {
+                    const areaOpts = Array.from(areaSelect.options).filter(o => o.value);
+                    if (setSelected && String(currentAreaId)) {
+                        const found = areaOpts.find(o => String(o.value) === String(currentAreaId));
+                        if (found) {
+                            found.selected = true;
+                            areaSelect.dispatchEvent(new Event('change'));
+                            return;
+                        }
+                    }
+                    // If only one area available and not explicitly set, auto-select and trigger change
+                    if (areaOpts.length === 1 && !setSelected) {
+                        areaOpts[0].selected = true;
+                        areaSelect.dispatchEvent(new Event('change'));
+                    }
+                }, 0);
+            })
+            .catch(err => console.error('Failed to load property areas', err));
+    }
+
+    // On change, load areas and try to preserve previous area/module/material if present
+    typeSelect.addEventListener('change', function () {
+        // Keep previous selections
+        const prevArea = areaSelect.value;
+        const prevModule = moduleSelect ? moduleSelect.value : null;
+        const prevMaterial = (document.getElementById('material_id') && document.getElementById('material_id').value) || null;
+
+        loadAreas(this.value, false);
+        // After areas load logic will handle auto-select and change dispatch
+    });
+
+    // On page load, pre-load areas for selected type and set the current area
+    if (typeSelect.value) {
+        loadAreas(typeSelect.value, true);
+    }
+
+    // When area changes, load modules for that area
+    if (moduleSelect) {
+        areaSelect.addEventListener('change', function () {
+            const areaId = this.value;
+            moduleSelect.innerHTML = '<option value="">Select Property Module</option>';
+            if (!areaId) return;
+            const url = `{{ url('/admin/property-modules/by-area') }}/${areaId}`;
+            console.debug('Fetching materials for module:', url);
+            fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(resp => { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.json(); })
+                .then(data => {
+                    console.debug('Property modules response for area', areaId, data);
+                    data.forEach(mod => {
+                        const opt = document.createElement('option');
+                        opt.value = mod.id;
+                        opt.textContent = mod.property_module_name;
+                        if (String(mod.id) === String(currentModuleId)) opt.selected = true;
+                        moduleSelect.appendChild(opt);
+                    });
+                        // Auto-select if only module or currentModuleId matches; then dispatch change to load materials
+                        setTimeout(() => {
+                            const opts = Array.from(moduleSelect.options).filter(o => o.value);
+                            if (opts.length === 1) {
+                                opts[0].selected = true;
+                                if (moduleSelect.value) moduleSelect.dispatchEvent(new Event('change'));
+                            } else if (String(currentModuleId)) {
+                                // if a currentModuleId exists, try to select it and dispatch change
+                                const found = opts.find(o => String(o.value) === String(currentModuleId));
+                                if (found) {
+                                    found.selected = true;
+                                    moduleSelect.dispatchEvent(new Event('change'));
+                                }
+                            }
+                        }, 0);
+                })
+                .catch(err => console.error('Failed to load property modules', err));
+        });
+
+        // Preload modules for the currently selected area on page load
+        if (areaSelect.value) {
+            const url = `{{ url('/admin/property-modules/by-area') }}/${areaSelect.value}`;
+            fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(resp => { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.json(); })
+                .then(data => {
+                    data.forEach(mod => {
+                        const opt = document.createElement('option');
+                        opt.value = mod.id;
+                        opt.textContent = mod.property_module_name;
+                        if (String(mod.id) === String(currentModuleId)) opt.selected = true;
+                        moduleSelect.appendChild(opt);
+                    });
+                        // Auto-select if only one module and dispatch change to load materials
+                        setTimeout(() => {
+                            const opts = Array.from(moduleSelect.options).filter(o => o.value);
+                            if (opts.length === 1) {
+                                opts[0].selected = true;
+                                if (moduleSelect.value) moduleSelect.dispatchEvent(new Event('change'));
+                            }
+                        }, 0);
+                })
+                .catch(err => console.error('Failed to preload property modules', err));
+        }
+        // Load materials when module changes
+        const materialSelect = document.getElementById('material_id');
+        const currentMaterialId = materialSelect ? (materialSelect.dataset.currentMaterial || null) : null;
+
+        moduleSelect.addEventListener('change', function () {
+            const moduleId = this.value;
+            if (!materialSelect) return;
+            materialSelect.innerHTML = '<option value="">Select Material</option>';
+            if (!moduleId) return;
+            const url = `{{ url('/admin/materials/by-module') }}/${moduleId}`;
+            fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(resp => { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.json(); })
+                .then(data => {
+                    data.forEach(mat => {
+                        const opt = document.createElement('option');
+                        opt.value = mat.id;
+                        opt.textContent = mat.material_name;
+                        if (String(mat.id) === String(currentMaterialId)) opt.selected = true;
+                        materialSelect.appendChild(opt);
+                    });
+                    // Auto-select if only one material
+                    setTimeout(() => {
+                        const opts = Array.from(materialSelect.options).filter(o => o.value);
+                        if (opts.length === 1) opts[0].selected = true;
+                    }, 0);
+                })
+                .catch(err => console.error('Failed to load materials', err));
+        });
+
+        // Preload materials for the currently selected module on page load
+        if (moduleSelect.value && materialSelect) {
+            const urlm = `{{ url('/admin/materials/by-module') }}/${moduleSelect.value}`;
+            fetch(urlm, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(resp => { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.json(); })
+                .then(data => {
+                    data.forEach(mat => {
+                        const opt = document.createElement('option');
+                        opt.value = mat.id;
+                        opt.textContent = mat.material_name;
+                        if (String(mat.id) === String(currentMaterialId)) opt.selected = true;
+                        materialSelect.appendChild(opt);
+                    });
+                    setTimeout(() => {
+                        const opts = Array.from(materialSelect.options).filter(o => o.value);
+                        if (opts.length === 1) opts[0].selected = true;
+                    }, 0);
+                })
+                .catch(err => console.error('Failed to preload materials', err));
+        }
+    }
+
+    // Submit guard
+    const form = document.getElementById('form_sample_2');
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            const requiredSelects = ['property_type_id', 'property_area_id', 'property_module_id'];
+            for (const name of requiredSelects) {
+                const el = document.getElementById(name);
+                if (!el) continue;
+                if (!el.value) {
+                    e.preventDefault();
+                    el.focus();
+                    alert('Please select ' + el.previousElementSibling.textContent.trim());
+                    return false;
+                }
+            }
+            return true;
+        });
+    }
+});
+</script>
+@endpush
