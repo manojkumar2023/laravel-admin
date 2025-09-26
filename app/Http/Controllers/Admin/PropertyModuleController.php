@@ -89,4 +89,11 @@ class PropertyModuleController extends Controller
         $areas = PropertyArea::where('property_type_id', $typeId)->get(['id', 'property_area_name']);
         return response()->json($areas);
     }
+
+    // Return property modules for a given property area (AJAX)
+    public function modulesByArea($areaId)
+    {
+        $modules = PropertyModule::where('property_area_id', $areaId)->get(['id', 'property_module_name']);
+        return response()->json($modules);
+    }
 }

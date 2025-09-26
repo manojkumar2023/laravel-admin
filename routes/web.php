@@ -87,8 +87,16 @@ Route::middleware(['auth:admin', \App\Http\Middleware\PreventBackHistory::class]
     Route::get('/admin/property-modules', [App\Http\Controllers\Admin\PropertyModuleController::class, 'index'])->name('admin.property-modules.index');
     Route::get('/admin/property-modules/create', [App\Http\Controllers\Admin\PropertyModuleController::class, 'create'])->name('admin.property-modules.create');
     Route::get('/admin/property-areas/by-type/{typeId}', [App\Http\Controllers\Admin\PropertyModuleController::class, 'areasByType'])->name('admin.property-areas.byType');
+    Route::get('/admin/property-modules/by-area/{areaId}', [App\Http\Controllers\Admin\PropertyModuleController::class, 'modulesByArea'])->name('admin.property-modules.byArea');
     Route::post('/admin/property-modules/store', [App\Http\Controllers\Admin\PropertyModuleController::class, 'store'])->name('admin.property-modules.store');
     Route::get('/admin/property-modules/{id}/edit', [App\Http\Controllers\Admin\PropertyModuleController::class, 'edit'])->name('admin.property-modules.edit');
     Route::put('/admin/property-modules/{id}', [App\Http\Controllers\Admin\PropertyModuleController::class, 'update'])->name('admin.property-modules.update');
     Route::delete('/admin/property-modules/{id}', [App\Http\Controllers\Admin\PropertyModuleController::class, 'destroy'])->name('admin.property-modules.destroy');
+    // Material Routes
+    Route::get('/admin/materials', [App\Http\Controllers\Admin\MaterialController::class, 'index'])->name('admin.materials.index');
+    Route::get('/admin/materials/create', [App\Http\Controllers\Admin\MaterialController::class, 'create'])->name('admin.materials.create');
+    Route::post('/admin/materials/store', [App\Http\Controllers\Admin\MaterialController::class, 'store'])->name('admin.materials.store');
+    Route::get('/admin/materials/{id}/edit', [App\Http\Controllers\Admin\MaterialController::class, 'edit'])->name('admin.materials.edit');
+    Route::put('/admin/materials/{id}', [App\Http\Controllers\Admin\MaterialController::class, 'update'])->name('admin.materials.update');
+    Route::delete('/admin/materials/{id}', [App\Http\Controllers\Admin\MaterialController::class, 'destroy'])->name('admin.materials.destroy');
 });

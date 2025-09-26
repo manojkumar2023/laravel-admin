@@ -39,6 +39,11 @@
                             <span class="title">Property Modules</span>
                         </a>
                     </li>
+                    <li class="nav-item  ">
+                        <a href="{{ route('admin.materials.index') }}" class="nav-link ">
+                            <span class="title">Materials</span>
+                        </a>
+                    </li>
                 </ul>
             </li>
             <li class="heading">
