@@ -38,6 +38,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(PropertyTypeSeeder::class);
+        $this->call(PropertyOptionSeeder::class);
 
     }
 }
