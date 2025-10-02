@@ -56,6 +56,7 @@
                                 <th>Property Module Name</th>
                                 <th>Material Name</th>
                                 <th>Finish Name</th>
+                                <th>Price</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -69,6 +70,7 @@
                                 <td>{{$data->propertyModule->property_module_name ?? ''}}</td>
                                 <td>{{$data->material->material_name ?? ''}}</td>
                                 <td>{{$data->finish_name ?? ''}}</td>
+                                <td>{{ $data->price !== null ? number_format($data->price, 2) : '' }}</td>
                                 <td>
                                     <span class="label label-sm label-success"> {{ $data->status == 707 ? 'Active' : 'Inactive' }} </span>
                                 </td>

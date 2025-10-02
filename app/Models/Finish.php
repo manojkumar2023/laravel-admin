@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Finish extends Model
 {
     protected $table = 'finishes';
-    protected $fillable = ['property_type_id', 'property_area_id', 'property_module_id', 'material_id', 'finish_name', 'slug', 'status'];
+    protected $fillable = ['property_type_id', 'property_area_id', 'property_module_id', 'material_id', 'finish_name', 'slug', 'status', 'price'];
 
     public function propertyType()
     {

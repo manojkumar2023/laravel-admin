@@ -124,6 +124,16 @@
                                     @enderror
                                 </div>
                             </div>
+                            <div class="form-group @error('price') has-error @enderror">
+                                <label class="control-label col-md-3">Price
+                                </label>
+                                <div class="col-md-4">
+                                    <input type="number" name="price" value="{{ old('price') }}" class="form-control" step="0.01" min="0" />
+                                    @error('price')
+                                        <span class="help-block"> {{ $message }} </span>
+                                    @enderror
+                                </div>
+                            </div>
                             <div class="form-group @error('status') has-error @enderror">
                                 <label class="control-label col-md-3">Status
                                     <span class="required"> * </span>

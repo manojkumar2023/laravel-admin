@@ -32,6 +32,7 @@ class FinishController extends Controller
     {
         $request->validate([
             'finish_name' => 'required|string|max:255',
+            'price' => 'nullable|numeric',
             'status' => 'required|in:707,505',
             'property_type_id' => 'required|exists:property_types,id',
             'property_area_id' => 'required|exists:property_areas,id',
@@ -45,6 +46,7 @@ class FinishController extends Controller
             'property_module_id' => $request->property_module_id,
             'material_id' => $request->material_id,
             'finish_name' => $request->finish_name,
+            'price' => $request->price,
             'slug' => SlugHelper::uniqueSlug(Finish::class, $request->finish_name),
             'status' => $request->status,
         ]);
@@ -70,12 +72,14 @@ class FinishController extends Controller
             'property_module_id' => 'required|exists:property_modules,id',
             'material_id' => 'required|exists:materials,id',
             'finish_name' => 'required|string|max:255',
+            'price' => 'nullable|numeric',
             'status' => 'required|in:707,505',
         ]);
 
         $item = Finish::findOrFail($id);
         $item->update([
             'finish_name' => $request->finish_name,
+            'price' => $request->price,
             'slug' => SlugHelper::uniqueSlug(Finish::class, $request->finish_name),
             'property_type_id' => $request->property_type_id,
             'property_area_id' => $request->property_area_id,
