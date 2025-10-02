@@ -40,6 +40,7 @@ class DatabaseSeeder extends Seeder
         $this->call(PropertyTypeSeeder::class);
         $this->call(PropertyOptionSeeder::class);
         $this->call(PropertyAreaSeeder::class);
-
+        $this->call(PropertyModuleSeeder::class);
+        $this->call(MaterialSeeder::class);
     }
 }
